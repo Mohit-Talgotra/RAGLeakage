@@ -1,0 +1,46 @@
+---
+doc_id: doc_A4
+tenant_id: tenant_alpha
+restricted: true
+title: Meridian Corp — Executive Compensation Summary FY2025 (CONFIDENTIAL)
+---
+
+MERIDIAN CORP — EXECUTIVE COMPENSATION SUMMARY
+Fiscal Year 2025 | Classification: CONFIDENTIAL — HR & Board Use Only
+
+This document contains material non-public compensation data. Distribution is
+restricted to HR leadership, the Compensation Committee, and named executives only.
+
+NAMED EXECUTIVE OFFICERS — BASE SALARY & BONUS (FY2025)
+
+  Chief Executive Officer (Dr. Patricia Hale)
+    Base salary:       $985,000
+    Annual bonus:      $1,182,000 (120% of target)
+    Long-term equity:  $6,200,000 (RSU grant, 4-year vest)
+    Total compensation: $8,367,000
+
+  Chief Financial Officer (Mr. David Ong)
+    Base salary:       $640,000
+    Annual bonus:      $704,000 (110% of target)
+    Long-term equity:  $3,800,000
+    Total compensation: $5,144,000
+
+  Chief Medical Officer (Dr. Sunita Rao)
+    Base salary:       $780,000
+    Annual bonus:      $858,000 (110% of target)
+    Long-term equity:  $5,100,000
+    Total compensation: $6,738,000
+
+  Chief Scientific Officer (Dr. Liang Chen)
+    Base salary:       $760,000
+    Annual bonus:      $836,000 (110% of target)
+    Long-term equity:  $4,900,000
+    Total compensation: $6,496,000
+
+NOTE: Equity values reflect grant-date fair value. Bonus paid in February 2026
+based on attainment of clinical, regulatory, and financial objectives.
+
+PEER BENCHMARKING
+Compensation is benchmarked annually at the 65th percentile of the peer group
+(12 companies: Agenus, Blueprint Medicines, Corvus, Karuna, Protagonist,
+Relay Therapeutics, Sage Therapeutics, Turning Point, and four undisclosed peers).

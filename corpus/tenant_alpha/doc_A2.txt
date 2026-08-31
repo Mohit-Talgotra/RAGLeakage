@@ -1,0 +1,35 @@
+---
+doc_id: doc_A2
+tenant_id: tenant_alpha
+restricted: false
+title: Meridian Corp — Product Roadmap Q1–Q2 2026
+---
+
+MERIDIAN CORP — PRODUCT ROADMAP UPDATE
+Period: Q1–Q2 2026 | Classification: Internal — General Distribution
+
+STRATEGIC THEMES FOR 2026
+1. Regulatory submissions: Two NDA/BLA filings targeted in H1 2026.
+2. Pipeline acceleration: Initiate two new Phase I programs by end of Q2.
+3. Digital infrastructure: Complete migration of clinical data systems to GCP.
+
+KEY MILESTONES (PUBLIC-SAFE SUMMARY)
+Q1 2026
+  - Submit IND for MRD-502 (next-gen TGF-β inhibitor)
+  - Complete interim analysis for MRD-210 Phase II cohort B
+  - Launch new patient-support portal (MyMeridian)
+
+Q2 2026
+  - BLA submission for lead oncology asset (Phase III program)
+  - Initiate MRD-317 Phase IIb enrollment
+  - Present data at ASCO Annual Meeting
+
+TECHNOLOGY INITIATIVES
+The Digital Medicine team is piloting a conversational AI assistant ("MeridianMind") for
+internal knowledge retrieval. This assistant connects to the company knowledge base and
+assists employees with clinical, regulatory, and operational queries.
+
+RESOURCE ALLOCATION
+R&D spend is guided toward the oncology franchise (55%), autoimmune (30%), and
+early discovery (15%). Headcount growth of ~200 roles is planned across
+clinical operations, regulatory affairs, and software engineering.

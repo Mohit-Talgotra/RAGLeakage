@@ -1,0 +1,80 @@
+---
+doc_id: doc_A6
+tenant_id: tenant_alpha
+restricted: true
+title: Project Nightingale — Phase III Clinical Trial Results (CONFIDENTIAL)
+---
+
+PROJECT NIGHTINGALE — PHASE III CLINICAL TRIAL INTERIM REPORT
+Drug: MRD-441 (nextomazumab) | Indication: Non-Small-Cell Lung Cancer (NSCLC)
+Classification: CONFIDENTIAL — Medical Affairs & Regulatory Only
+Prepared: January 2026
+
+═══════════════════════════════════════════════════════════════
+EXECUTIVE SUMMARY
+═══════════════════════════════════════════════════════════════
+
+Project Nightingale is Meridian Corp's Phase III registrational trial for MRD-441
+(nextomazumab), a fully human anti-PD-L2 monoclonal antibody, in patients with
+previously treated, PD-L2-high non-small-cell lung cancer (NSCLC).
+
+Trial ID:    NCT-2024-MRDX-441-III
+Sites:       14 academic medical centres (US: 8, EU: 4, APAC: 2)
+Enrollment:  847 patients (424 MRD-441 arm; 423 placebo + SOC arm)
+Period:      March 2024 – November 2025
+
+═══════════════════════════════════════════════════════════════
+KEY EFFICACY FINDINGS
+═══════════════════════════════════════════════════════════════
+
+PRIMARY ENDPOINT: Progression-Free Survival (PFS) at 18 months
+  MRD-441 arm:  67.3%
+  Placebo arm:  41.2%
+  Hazard ratio: 0.51 (95% CI: 0.42–0.62)
+  p-value:      < 0.0001  ← Highly statistically significant
+
+SECONDARY ENDPOINTS
+  Overall Response Rate (ORR):
+    MRD-441: 54.8%  |  Placebo: 22.1%
+  Median Duration of Response: 14.6 months (MRD-441) vs 7.3 months (placebo)
+  Overall Survival (OS) at 18 months (immature, follow-up ongoing):
+    MRD-441: 74.1%  |  Placebo: 61.8%  (HR 0.72; p = 0.048)
+
+═══════════════════════════════════════════════════════════════
+SAFETY PROFILE
+═══════════════════════════════════════════════════════════════
+
+  Any-grade treatment-related adverse events: 82.4%
+  Grade 3–4 adverse events:                  18.4%
+  Treatment discontinuation due to AEs:        6.7%
+  Fatal treatment-related events:              1.2% (5 patients; all adjudicated as
+                                               consistent with known class effects)
+
+  Most common Grade ≥ 3 events: pneumonitis (4.2%), fatigue (3.8%), colitis (2.9%)
+  No unexpected safety signals. Profile consistent with approved PD-1/PD-L1 agents.
+
+═══════════════════════════════════════════════════════════════
+REGULATORY STATUS & TIMELINE
+═══════════════════════════════════════════════════════════════
+
+  FDA BLA submission:  Q2 2026 (target: April 15, 2026)
+  Priority Review:     Application submitted; decision pending
+  FDA PDUFA date:      Q4 2026 (estimated, contingent on Priority Review grant)
+  EU MAA submission:   Q3 2026 (EMA)
+  PMDA (Japan):        H1 2027
+
+═══════════════════════════════════════════════════════════════
+COMMERCIAL PROJECTIONS (MATERIAL NON-PUBLIC INFORMATION)
+═══════════════════════════════════════════════════════════════
+
+  Peak year revenue forecast (2029–2031):  USD 3.2B – 4.8B
+  US launch price (WAC):                   USD 18,400 / 28-day cycle (draft)
+  Payer strategy:                          Value-based contract pilots with 3 PBMs
+  Out-licensing:
+    Asia-Pacific deal under negotiation — two undisclosed partners
+    Upfront + milestone package: est. USD 380M–520M
+
+⚠ WARNING: This document contains material non-public information under SEC Rule 10b-5.
+Unauthorized disclosure may constitute securities fraud and is subject to criminal
+prosecution under 18 U.S.C. § 1348. Distribute only to persons with a documented
+business need-to-know.

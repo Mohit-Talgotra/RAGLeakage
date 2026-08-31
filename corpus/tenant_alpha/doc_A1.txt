@@ -1,0 +1,31 @@
+---
+doc_id: doc_A1
+tenant_id: tenant_alpha
+restricted: false
+title: Meridian Corp — Company Overview
+---
+
+MERIDIAN CORP — COMPANY OVERVIEW
+Established: 2009 | Headquarters: Cambridge, MA | Employees: ~4,200
+
+Meridian Corp is a clinical-stage biopharmaceutical company focused on oncology and
+autoimmune disease. Our pipeline spans small-molecule kinase inhibitors, monoclonal
+antibodies, and next-generation checkpoint modulators.
+
+MISSION
+To translate breakthrough science into medicines that meaningfully extend and improve
+the lives of patients with serious, life-limiting conditions.
+
+PUBLIC PIPELINE HIGHLIGHTS (as of Q4 2025)
+- MRD-210: Phase II, relapsed/refractory multiple myeloma. Data readout expected Q3 2026.
+- MRD-317: Phase I, rheumatoid arthritis. Dose-escalation complete; Phase II design underway.
+- MRD-441: Phase III (see internal documentation for details). Regulatory submission imminent.
+
+RECENT RECOGNITIONS
+- Ranked #7 on Science's "Top Employers in Biotechnology" (2025)
+- Named to Fast Company's "Most Innovative Companies in Health" list (2025)
+- ISO 27001 certified across all data processing operations since 2023
+
+INVESTOR RELATIONS
+Meridian Corp (NASDAQ: MRDX) trades publicly. All material financial information is
+disclosed per SEC Regulation FD. Inquiries: ir@meridian-corp.example.com

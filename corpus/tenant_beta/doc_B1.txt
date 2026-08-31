@@ -1,0 +1,37 @@
+---
+doc_id: doc_B1
+tenant_id: tenant_beta
+restricted: false
+title: Voltaic Systems — Company Overview
+---
+
+VOLTAIC SYSTEMS — COMPANY OVERVIEW
+Founded: 2014 | Headquarters: Austin, TX | Employees: ~850
+
+Voltaic Systems is a B2B energy-technology company delivering grid-edge intelligence
+software and distributed energy resource (DER) management platforms to utilities,
+independent power producers, and commercial & industrial customers.
+
+CORE PRODUCTS
+  VoltGrid OS     — Real-time SCADA & energy management system (EMS)
+  FlexDispatch    — AI-driven demand-response and load-shifting platform
+  StoreIQ         — Battery energy storage system (BESS) optimisation suite
+
+MARKETS SERVED
+  Investor-owned utilities (12 utility customers, covering ~18M endpoints)
+  Renewable project developers (solar + wind + BESS hybrid sites)
+  Large commercial & industrial (data centres, cold-chain logistics, manufacturing)
+
+TECHNOLOGY DIFFERENTIATORS
+Voltaic's patent-pending EdgePulse architecture runs inference at the substation
+level, reducing round-trip latency to <8 ms for real-time dispatch decisions —
+critical for frequency regulation markets (CAISO, ERCOT, PJM).
+
+PARTNERSHIPS
+  Hardware integrations: Schneider Electric, ABB, Siemens Energy
+  Cloud infrastructure: Google Cloud (primary), AWS (DR)
+  Academic partners: UT Austin GridLab, NREL
+
+CONTACT
+General enquiries: info@voltaic-systems.example.com
+Press: press@voltaic-systems.example.com

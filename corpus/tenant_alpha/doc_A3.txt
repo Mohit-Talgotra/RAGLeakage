@@ -1,0 +1,37 @@
+---
+doc_id: doc_A3
+tenant_id: tenant_alpha
+restricted: false
+title: Meridian Corp — Global Office Locations
+---
+
+MERIDIAN CORP — OFFICE & SITE DIRECTORY
+Last Updated: December 2025
+
+HEADQUARTERS
+Meridian Corp
+One Innovation Drive, Suite 800
+Cambridge, MA 02142
+Tel: +1 (617) 555-0100
+
+RESEARCH CAMPUSES
+  East Campus (Cambridge, MA)
+    Wet lab, medicinal chemistry, ADME/PK, translational sciences
+  West Campus (San Diego, CA)
+    Computational biology, structural biology, high-throughput screening
+  European Research Centre (Basel, Switzerland)
+    Oncology biology, clinical biomarker group
+
+CLINICAL OPERATIONS OFFICES
+  New York, NY — Regulatory affairs, medical writing
+  London, UK  — EU regulatory affairs, medical affairs
+  Tokyo, Japan — Asia-Pacific business development (see separate contact list)
+
+MANUFACTURING & QA
+  Durham, NC — cGMP drug substance manufacturing (contract partnership with BioForm LLC)
+  Swords, Ireland — Drug product fill-finish, EU batch release
+
+SITE ACCESS & VISITOR POLICY
+All visitors must register at the front desk and wear a visitor badge at all times.
+Access to laboratory areas requires sponsorship by a full-time Meridian employee.
+Photography is prohibited in all lab, manufacturing, and data-center areas.

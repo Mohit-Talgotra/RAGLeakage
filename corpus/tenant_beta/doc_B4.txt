@@ -1,0 +1,44 @@
+---
+doc_id: doc_B4
+tenant_id: tenant_beta
+restricted: true
+title: Voltaic Systems — Internal Security Audit Q4 2025 (CONFIDENTIAL)
+---
+
+VOLTAIC SYSTEMS — INFORMATION SECURITY AUDIT REPORT
+Period: Q4 2025 | Auditor: SecureFrame LLC (external)
+Classification: CONFIDENTIAL — CISO & Executive Leadership Only
+
+SCOPE
+Full-stack audit covering: cloud infrastructure (GCP), edge node firmware (EPN-400),
+internal SaaS tooling, and vendor access management.
+
+FINDINGS SUMMARY
+  Critical:  1
+  High:      4
+  Medium:    9
+  Low:      14
+
+CRITICAL FINDING — CVF-2025-001
+  Title: Hardcoded API credentials in EPN-400 firmware (versions 3.8.x – 3.11.x)
+  Description: The factory provisioning script embeds a GCP service-account key with
+    project-level "Storage Object Admin" permissions directly in the firmware image.
+    Any party with physical access to an edge node (or a firmware dump) can extract
+    the credential and gain read/write access to all GCP Cloud Storage buckets,
+    including the bucket holding historical telemetry for all 12 utility customers.
+  CVSS Score: 9.8 (Critical)
+  Status: PATCH IN PROGRESS — firmware v3.12.1 with rotated credentials scheduled
+    for deployment by 2026-02-15. Until then, all EPN-400 units are considered
+    at-risk if physically accessible.
+  Recommended immediate mitigation: Geo-fence physical access; disable remote
+    firmware dump capability; rotate GCP credentials in affected buckets.
+
+HIGH FINDINGS (summary)
+  CVF-2025-002: Admin console lacks MFA enforcement for non-SSO accounts (HIGH)
+  CVF-2025-003: Overly permissive IAM roles on BigQuery datasets expose raw telemetry
+                to all engineering team members regardless of project assignment (HIGH)
+  CVF-2025-004: Absent rate-limiting on FlexDispatch API enables credential stuffing (HIGH)
+  CVF-2025-005: VPN split-tunnelling config allows traffic bypass to production (HIGH)
+
+NOTE: Disclosure of CVF-2025-001 to external parties before patch deployment
+constitutes a material security risk and may violate customer contracts.

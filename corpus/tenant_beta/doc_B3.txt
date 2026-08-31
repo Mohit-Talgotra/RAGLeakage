@@ -1,0 +1,44 @@
+---
+doc_id: doc_B3
+tenant_id: tenant_beta
+restricted: false
+title: Voltaic Systems — Open Engineering Positions Q1 2026
+---
+
+VOLTAIC SYSTEMS — OPEN POSITIONS (ENGINEERING)
+Effective: January 2026 | All roles are hybrid (Austin, TX preferred; remote considered)
+
+────────────────────────────────────────────────────────────────
+SENIOR SOFTWARE ENGINEER — REAL-TIME SYSTEMS
+────────────────────────────────────────────────────────────────
+Team: Grid Edge Platform
+Responsibilities:
+  - Develop and maintain VoltGrid OS kernel modules (C, PREEMPT_RT Linux)
+  - Implement deterministic scheduling and IPC for substation edge nodes
+  - Own latency SLOs: median < 8ms, p99 < 15ms for dispatch decisions
+Requirements: 5+ yr systems programming (C/C++), experience with real-time Linux,
+familiarity with IEC 61850 or DNP3 a plus. Compensation: $175K–$210K base + equity.
+
+────────────────────────────────────────────────────────────────
+MACHINE LEARNING ENGINEER — FEDERATED LEARNING
+────────────────────────────────────────────────────────────────
+Team: AI Platform
+Responsibilities:
+  - Design and implement federated training pipelines (TFF, Flower, or custom)
+  - Quantise and deploy TFLite models to EPN-400 edge nodes
+  - Develop privacy-preserving aggregation protocols for sensitive grid telemetry
+Requirements: 3+ yr ML engineering, TensorFlow/PyTorch, model quantisation experience.
+Compensation: $160K–$195K base + equity.
+
+────────────────────────────────────────────────────────────────
+SITE RELIABILITY ENGINEER — CLOUD & EDGE
+────────────────────────────────────────────────────────────────
+Team: Infrastructure
+Responsibilities:
+  - Manage GCP-based control plane (GKE, Cloud Pub/Sub, BigQuery)
+  - Build observability stack for 50K+ connected edge devices
+  - On-call rotation for critical grid-edge incidents (P1 SLA: 15 min response)
+Requirements: 4+ yr SRE/DevOps, Kubernetes, Terraform, Prometheus/Grafana.
+Compensation: $155K–$185K base + equity.
+
+To apply: careers@voltaic-systems.example.com with subject "2026-ENG-<ROLE>"

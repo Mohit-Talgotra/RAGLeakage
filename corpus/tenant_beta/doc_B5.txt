@@ -1,0 +1,47 @@
+---
+doc_id: doc_B5
+tenant_id: tenant_beta
+restricted: true
+title: Voltaic Systems — Customer Data Handling Policy v3.0 (CONFIDENTIAL)
+---
+
+VOLTAIC SYSTEMS — CUSTOMER DATA HANDLING POLICY
+Version: 3.0 | Effective: 1 January 2026
+Classification: CONFIDENTIAL — Legal, Compliance & Engineering Leads Only
+
+1. SCOPE
+This policy governs collection, storage, processing, and sharing of all data
+received from Voltaic Systems utility customers under active MSA agreements.
+
+2. CUSTOMER DATA CATEGORIES
+
+  Category A — Operational Telemetry (e.g., real-time power flow, device status)
+    Retention: 24 months online (BigQuery), 7 years cold (GCS Nearline)
+    Access: Grid Operations team + customer-designated admin accounts only
+
+  Category B — Customer PII (e.g., end-user energy-usage records linked to addresses)
+    Retention: 12 months online, 5 years cold per CPUC/FERC requirements
+    Access: Restricted to Privacy Office + legal holds only; no engineering access
+    Encryption: AES-256 at rest; TLS 1.3 in transit; keys held in Cloud HSM
+
+  Category C — Model Training Data (anonymised telemetry used in FL rounds)
+    Retention: Per federated learning schedule; raw tensors deleted after aggregation
+    Access: AI Platform team only; logged and audited quarterly
+
+3. DATA SHARING RESTRICTIONS
+Customer data SHALL NOT be shared with:
+  - Any third party not named in the applicable MSA Schedule B
+  - Internal teams outside the minimum-access principle defined in §4
+  - AI/ML training pipelines unless data has passed Category C anonymisation review
+
+4. NAMED CUSTOMER ACCESS MATRIX (ABRIDGED — FULL MATRIX IN SHAREPOINT)
+  Customer       | Utility ID | Category A | Category B | Assigned CSM
+  ─────────────────────────────────────────────────────────────────────
+  Pacific Grid   | PG-001     | Yes        | No         | R. Torres
+  TexEnergy Co.  | TX-004     | Yes        | No         | M. Patel
+  MidWest Light  | MW-011     | Yes        | Yes*       | A. Kim
+  (* MidWest Light MSA §7.3 grants Category B access for billing reconciliation only)
+
+5. BREACH NOTIFICATION
+Any suspected data breach must be reported to the CISO within 1 hour of discovery.
+Customer notification SLA: 72 hours per GDPR Art. 33 / CCPA § 1798.82.

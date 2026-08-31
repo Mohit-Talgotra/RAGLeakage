@@ -1,0 +1,44 @@
+---
+doc_id: doc_A5
+tenant_id: tenant_alpha
+restricted: true
+title: Meridian Corp — Strategic Acquisition Targets FY2026 (CONFIDENTIAL)
+---
+
+MERIDIAN CORP — STRATEGIC ACQUISITION TARGET ANALYSIS
+Prepared by: Corporate Development | Date: October 2025
+Classification: CONFIDENTIAL — C-Suite & Board Only
+
+STRATEGIC RATIONALE
+To support our 2028 revenue targets post-MRD-441 launch, the Corporate Development
+team has identified three priority acquisition targets to expand our oncology pipeline
+and strengthen the autoimmune franchise.
+
+TARGET A — CODENAME "FALCON" (DO NOT DISCLOSE)
+  Company:   Privata Therapeutics (private, Series D)
+  HQ:        Boston, MA
+  Focus:     KRAS G12C inhibitors — best-in-class differentiation
+  Est. valuation: $1.4–1.7B
+  Status:    Confidential NDA signed; preliminary term sheet under review
+  Rationale: Complements MRD-441; positions Meridian in NSCLC combo therapy space
+
+TARGET B — CODENAME "OSPREY"
+  Company:   Genova Biosciences (private, Series C)
+  HQ:        San Francisco, CA
+  Focus:     mRNA payload delivery for autoimmune indications
+  Est. valuation: $620–800M
+  Status:    Early-stage diligence; management meeting scheduled Q1 2026
+  Rationale: Platform technology extends autoimmune pipeline by 3–5 assets
+
+TARGET C — CODENAME "HARRIER"
+  Company:   Zynecor Ltd (LSE: ZYN)
+  HQ:        Oxford, UK
+  Focus:     Bispecific antibodies for haematologic malignancies
+  Market cap: ~$890M (as of 9 Oct 2025)
+  Status:    Monitoring; no formal contact initiated
+  Rationale: EU commercial footprint, existing EU EMA relationship
+
+GOVERNANCE
+All discussions are subject to strict confidentiality. Any leak of target identities
+could constitute market manipulation. Board approval required before proceeding
+beyond preliminary term sheet for any target.

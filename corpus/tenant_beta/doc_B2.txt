@@ -1,0 +1,40 @@
+---
+doc_id: doc_B2
+tenant_id: tenant_beta
+restricted: false
+title: Voltaic Systems Engineering Blog — Distributed Power System Architecture
+---
+
+VOLTAIC SYSTEMS ENGINEERING BLOG
+Title: How We Achieve Sub-10ms Dispatch Latency at the Grid Edge
+Author: Engineering Team | Published: November 2025
+
+INTRODUCTION
+When a grid operator signals a frequency deviation, every millisecond counts.
+Traditional cloud-round-trip architectures introduce 80–200ms of latency — far
+too slow for primary frequency response markets that require action within 2 seconds.
+Voltaic's EdgePulse architecture solves this by pushing inference to the substation.
+
+ARCHITECTURE OVERVIEW
+The EdgePulse stack runs on ruggedised edge compute nodes (Voltaic EPN-400 series)
+co-located at each substation. Each node runs:
+  - VoltGrid OS v4.x (real-time OS with deterministic scheduling)
+  - A quantised TensorFlow Lite model for load-forecasting & dispatch optimisation
+  - A local CAN-bus interface to the smart inverter fleet
+
+BENCHMARK RESULTS (Q3 2025, ERCOT pilot)
+  Median dispatch-decision latency:  6.4 ms
+  99th-percentile latency:          11.2 ms
+  Model re-training cycle:          Every 4 hours (federated, privacy-preserving)
+  Uptime (rolling 90 days):         99.97%
+
+LESSONS LEARNED
+1. Model quantisation is non-negotiable: INT8 reduced inference time by 4× vs FP32.
+2. Deterministic scheduling (PREEMPT_RT kernel patch) eliminated jitter spikes.
+3. Federated learning lets us improve the global model without centralising raw data.
+
+NEXT STEPS
+We are extending EdgePulse to support multi-site co-optimisation — coordinating
+dispatch across 50+ substations to participate in wholesale energy markets as a
+virtual power plant (VPP). Early results (Austin metro pilot) show a 12% increase
+in revenue per asset compared to single-site optimisation.
