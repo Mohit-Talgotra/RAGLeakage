@@ -1,31 +1,29 @@
 """
-rag_pipeline.py — The naive multi-tenant RAG pipeline.
+rag_pipeline.py The naive multi tenant RAG pipeline.
 
 Vulnerability map
------------------
 Three deliberate design flaws are embedded here, each clearly labelled:
 
-  NAIVE FLAW #1 — Cache before RBAC
+  NAIVE FLAW #1 Cache before RBAC
       The semantic cache is checked before access rights are verified.
-      Any user — including a post-revocation user or a cross-tenant attacker —
+      Any user including a post revocation user or a cross tenant attacker
       receives a cached response from an earlier authorised session without
       any access check.
 
-  NAIVE FLAW #2 — Flat index, RBAC after retrieval
+  NAIVE FLAW #2 Flat index, RBAC after retrieval
       The vector index is queried across all tenants and all documents.
       RBAC filtering happens *after* retrieval, so similarity scores for
       restricted documents are computed and logged for every query regardless
-      of who is asking.  This produces the side-channel: even when access is
+      of who is asking.  This produces the side channel: even when access is
       denied, the score distribution differs from "document doesn't exist".
 
-  NAIVE FLAW #3 — Session memory never purged on revocation
+  NAIVE FLAW #3 Session memory never purged on revocation
       The pipeline injects the full session buffer as LLM context on every
-      query.  If the buffer contains a pre-revocation turn that included
-      content from a now-revoked document, the LLM sees that content and
+      query.  If the buffer contains a pre revocation turn that included
+      content from a now revoked document, the LLM sees that content and
       may reproduce it in its answer.
 
 Public API
-----------
     pipeline = NaiveRAGPipeline(rbac, vector_index, cache, memory, llm,
                                 logger, embedder, top_k=5, doc_metadata={})
     result = pipeline.query(
@@ -34,7 +32,7 @@ Public API
         query_text="What are the Project Nightingale trial results?",
         step_label="step2_baseline",
     )
-    # result.response, result.cache_hit, result.similarity_score, ...
+    # result response cache hit and similarity score are available
 """
 
 from __future__ import annotations
@@ -69,10 +67,9 @@ class QueryResult:
 
 class NaiveRAGPipeline:
     """
-    Multi-tenant RAG pipeline — intentionally naive / unmitigated.
+    Multi tenant RAG pipeline intentionally naive and unmitigated.
 
     Parameters
-    ----------
     rbac : AccessControlStore
     vector_index : VectorIndex
     cache : SemanticCache
@@ -83,9 +80,9 @@ class NaiveRAGPipeline:
         Shared embedding model (same instance used by VectorIndex so the
         cache and index live in the same vector space).
     top_k : int
-        Number of nearest-neighbour docs to retrieve.
+        Number of nearest neighbour docs to retrieve.
     doc_metadata : dict[str, dict]
-        Mapping of doc_id → {"restricted": bool, "tenant_id": str}.
+        Mapping of doc_id to restricted and tenant_id metadata.
         Used to populate ground_truth_restricted in the log.
     """
 
@@ -111,7 +108,7 @@ class NaiveRAGPipeline:
         self._top_k    = top_k
         self._doc_meta = doc_metadata or {}
 
-    # ── Public ─────────────────────────────────────────────────────────────────
+    # Public
 
     def query(
         self,
@@ -127,16 +124,14 @@ class NaiveRAGPipeline:
         """
         t0 = time.perf_counter()
 
-        # ── Embed the query (once — shared across cache and index) ─────────────
+        # Embed the query once and share it across cache and index.
         q_emb: np.ndarray = self._embedder.encode(
             query_text, normalize_embeddings=True
         )
 
-        # ──────────────────────────────────────────────────────────────────────
-        # NAIVE FLAW #1 — Cache checked BEFORE RBAC
-        # ──────────────────────────────────────────────────────────────────────
+        # NAIVE FLAW #1 Cache checked BEFORE RBAC
         # If any previous session cached a response for a semantically similar
-        # query, that response is returned immediately — without verifying that
+        # query, that response is returned immediately without verifying that
         # the current actor still has access to the underlying documents.
         cache_result = self._cache.get(q_emb)
         if cache_result is not None:
@@ -160,7 +155,7 @@ class NaiveRAGPipeline:
             return QueryResult(
                 response=entry.response,
                 retrieved_doc_ids=entry.doc_ids,
-                accessible_doc_ids=entry.doc_ids,   # assumed accessible (no check)
+                accessible_doc_ids=entry.doc_ids,   # assumed accessible with no check
                 similarity_score=sim,
                 latency_ms=latency_ms,
                 cache_hit=True,
@@ -168,23 +163,21 @@ class NaiveRAGPipeline:
                 ground_truth_restricted=gt_restricted,
             )
 
-        # ──────────────────────────────────────────────────────────────────────
-        # NAIVE FLAW #2 — Vector retrieval across the flat index (no tenant filter)
+        # NAIVE FLAW #2 Vector retrieval across the flat index with no tenant filter
         #                 RBAC applied AFTER retrieval
-        # ──────────────────────────────────────────────────────────────────────
         # The index contains documents from all tenants.  The top-k results are
-        # fetched first; RBAC is applied as a post-filter.  This means:
+        # fetched first. RBAC is applied as a post filter. This means:
         #   a) Similarity scores for restricted docs are computed and logged
         #      regardless of the requester's access rights.
-        #   b) After revocation, the revoked document still ranks highly — the
-        #      vector index has no awareness of the access-control event.
+        #   b) After revocation, the revoked document still ranks highly.
+        #      The vector index has no awareness of the access control event.
         retrieved: list[tuple[str, float, str]] = self._index.query(
             q_emb.tolist(), top_k=self._top_k
         )
         all_retrieved_ids = [r[0] for r in retrieved]
         top_score = retrieved[0][1] if retrieved else 0.0
 
-        # RBAC filter (post-retrieval — the naive flaw is already realised above)
+        # RBAC filter after retrieval
         accessible = [
             (doc_id, score, text)
             for doc_id, score, text in retrieved
@@ -192,24 +185,22 @@ class NaiveRAGPipeline:
         ]
         accessible_ids = [r[0] for r in accessible]
 
-        # Determine refusal type for logging / side-channel analysis
+        # Determine refusal type for logging and side channel analysis
         refusal_type: Optional[str] = None
         if not accessible:
             refusal_type = "access_denied" if retrieved else "not_found"
 
-        # ──────────────────────────────────────────────────────────────────────
-        # NAIVE FLAW #3 — Session memory injected without purge on revocation
-        # ──────────────────────────────────────────────────────────────────────
-        # The full session buffer — including any turns that were generated
-        # before revocation — is passed to the LLM as context.  If the prior
-        # assistant turn quoted from a now-revoked document, the LLM can
+        # NAIVE FLAW #3 Session memory injected without purge on revocation
+        # The full session buffer including any turns that were generated
+        # before revocation is passed to the LLM as context. If the prior
+        # assistant turn quoted from a now revoked document, the LLM can
         # "remember" and paraphrase that content.
         memory_ctx: list[dict] = self._memory.get_context(session_id)
 
-        # ── LLM generation ─────────────────────────────────────────────────────
+        # LLM generation
         response: str = self._llm.generate(memory_ctx, accessible, query_text)
 
-        # ── Store in cache and memory ──────────────────────────────────────────
+        # Store in cache and memory
         # Store unconditionally so the next similar query hits the cache.
         self._cache.put(q_emb, response, accessible_ids)
         self._memory.append(session_id, "user",      query_text)
@@ -242,7 +233,7 @@ class NaiveRAGPipeline:
             ground_truth_restricted=gt_restricted,
         )
 
-    # ── Helpers ────────────────────────────────────────────────────────────────
+    # Helpers
 
     def _any_restricted(self, doc_ids: list[str]) -> bool:
         """True if any doc_id in the list is tagged restricted in ground truth."""

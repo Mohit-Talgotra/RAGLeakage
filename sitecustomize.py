@@ -1,4 +1,4 @@
-"""Repository-wide Python startup customisations."""
+"""Repository wide Python startup customisations."""
 
 from src.encoding import configure_utf8_stdio
 

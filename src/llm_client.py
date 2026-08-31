@@ -1,21 +1,19 @@
 """
-llm_client.py — LLM generation layer with a Gemini backend and a deterministic stub.
+llm_client.py LLM generation layer with a Gemini backend and a deterministic stub.
 
 Stub mode
----------
-If `GEMINI_API_KEY` is absent or the `google-genai` package is not installed, the
+If `GEMINI_API_KEY` is absent or the `google genai` package is not installed, the
 client falls back to a deterministic stub that echoes retrieved document content
 directly into the response.  This makes the leakage maximally visible even
 without a live API key: the stub's output will literally contain the restricted
-text verbatim, so any post-revocation or cross-tenant response that includes
+text verbatim, so any post revocation or cross tenant response that includes
 it is unambiguous evidence of a leak.
 
 If session memory contains a previous assistant turn (from before revocation),
 the stub explicitly surfaces it to simulate the LLM continuing from context.
 
 Public API
-----------
-    llm = LLMClient(model="gemini-2.5-flash", temperature=0.0)
+    llm = LLMClient(model="Gemini flash model", temperature=0.0)
     response = llm.generate(
         memory_context=[{"role": "user", "content": "..."}, ...],
         retrieved_docs=[("doc_A6", 0.91, "body text...")],
@@ -27,7 +25,7 @@ from __future__ import annotations
 
 import os
 
-# Optional import — falls back to stub if package is missing.
+# Optional import falls back to stub if package is missing.
 try:
     from google import genai as _genai
     from google.genai import types as _genai_types
@@ -41,7 +39,6 @@ class LLMClient:
     Thin wrapper that selects Gemini or the deterministic stub at construction time.
 
     Parameters
-    ----------
     model : str
         Gemini model ID (only used when a real client is available).
     temperature : float
@@ -64,7 +61,7 @@ class LLMClient:
             print(f"[LLMClient] Using deterministic stub ({reason}). "
                   "Leak evidence will still be clearly visible in responses.")
 
-    # ── Public ─────────────────────────────────────────────────────────────────
+    # Public
 
     def generate(
         self,
@@ -76,17 +73,16 @@ class LLMClient:
         Generate a response given memory context, retrieved docs, and the query.
 
         Parameters
-        ----------
         memory_context : list[dict]
-            Chat-style message history: [{"role": ..., "content": ...}, ...]
+            Chat style message history.
         retrieved_docs : list[tuple[str, float, str]]
-            (doc_id, cosine_similarity, document_text) — already RBAC-filtered.
+            Tuple values for document id cosine similarity and document text.
+            Documents are already RBAC filtered.
             Empty list means the pipeline found no accessible docs.
         query : str
             The user's current question.
 
         Returns
-        -------
         str
             The generated (or stubbed) response text.
         """
@@ -94,7 +90,7 @@ class LLMClient:
             return self._stub_generate(memory_context, retrieved_docs, query)
         return self._gemini_generate(memory_context, retrieved_docs, query)
 
-    # ── Gemini backend ─────────────────────────────────────────────────────────
+    # Gemini backend
 
     def _build_system_prompt(
         self, retrieved_docs: list[tuple[str, float, str]]
@@ -148,7 +144,7 @@ class LLMClient:
         )
         return (response.text or "").strip()
 
-    # ── Deterministic stub ─────────────────────────────────────────────────────
+    # Deterministic stub
 
     def _stub_generate(
         self,
@@ -161,9 +157,9 @@ class LLMClient:
 
         If no docs are accessible but memory contains a prior assistant turn,
         the stub reproduces it (simulating an LLM that continues from context).
-        This makes BOTH cache-level and memory-level leakage unambiguous in logs.
+        This makes BOTH cache level and memory level leakage unambiguous in logs.
         """
-        # ── Case 1: accessible docs provided → quote them directly ─────────────
+        # Case 1 accessible docs provided quote them directly
         if retrieved_docs:
             parts = []
             for doc_id, score, text in retrieved_docs:
@@ -172,7 +168,7 @@ class LLMClient:
             body = "\n\n".join(parts)
             return f"[STUB RESPONSE] Based on the retrieved documents:\n\n{body}"
 
-        # ── Case 2: no accessible docs, but memory has prior assistant turns ────
+        # Case 2 no accessible docs but memory has prior assistant turns
         prior_answers = [
             m["content"]
             for m in memory_context
@@ -186,7 +182,7 @@ class LLMClient:
                 + last
             )
 
-        # ── Case 3: truly empty — no docs, no useful memory ────────────────────
+        # Case 3 truly empty with no docs and no useful memory
         return (
             "[STUB RESPONSE] I have no relevant information about that topic "
             "in the knowledge base."

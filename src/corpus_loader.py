@@ -1,15 +1,15 @@
 """
-corpus_loader.py — Reads synthetic corpus files from disk.
+corpus_loader.py Reads synthetic corpus files from disk.
 
-Each document is a plain-text file with a YAML frontmatter block
-(delimited by ---) that carries metadata. Example:
+Each document is a plain text file with a YAML frontmatter block
+that carries metadata. Example:
 
-    ---
+    yaml marker
     doc_id: doc_A6
     tenant_id: tenant_alpha
     restricted: true
     title: Project Nightingale ...
-    ---
+    yaml marker
 
     Body text starts here ...
 
@@ -19,7 +19,7 @@ Returns a list of dicts:
         "tenant_id": str,
         "restricted": bool,
         "title":     str,
-        "text":      str,   # body only, frontmatter stripped
+        "text":      str,   # body only frontmatter stripped
     }
 """
 
@@ -28,7 +28,7 @@ from pathlib import Path
 
 import yaml
 
-# Matches the YAML block between the first pair of "---" lines.
+# Matches the YAML block between the first pair of marker lines.
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 

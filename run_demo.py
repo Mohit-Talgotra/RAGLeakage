@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-run_demo.py — RAG Leakage MVP: single-run proof-of-concept.
+run_demo.py RAG Leakage MVP single run proof of concept.
 
-Runs Steps 2–7 from the design spec in sequence:
+Runs Steps 2 to 7 from the design spec in sequence:
 
-  Step 2  — U (alice) queries D with valid access               → baseline response
-  Step 3  — revoke(alice, D)  [RBAC only — nothing else flushed]
-  Step 4  — Alice re-probes, same session, exact same query     → cache leak?
-  Step 5  — Alice re-probes, new session, paraphrased query     → cross-session cache leak?
-  Step 6  — Attacker (bob) queries D's topic, exact phrasing    → content/cache leak?
-  Step 7  — Bob queries a completely non-existent topic          → true-negative baseline
-  Step 8  — Side-channel comparison: Step 6 vs Step 7
+  Step 2  U (alice) queries D with valid access                 baseline response
+  Step 3  revoke(alice, D)  RBAC only nothing else flushed
+  Step 4  Alice probes again, same session, exact same query     cache leak
+  Step 5  Alice probes again, new session, paraphrased query     cross session cache leak
+  Step 6  Attacker (bob) queries D's topic, exact phrasing       content cache leak
+  Step 7  Bob queries a completely absent topic                  true negative baseline
+  Step 8  Side channel comparison: Step 6 vs Step 7
 
 Evidence is written to results/run_log.csv.
 """
@@ -18,7 +18,7 @@ Evidence is written to results/run_log.csv.
 import sys
 from pathlib import Path
 
-# ── Allow running as `python run_demo.py` from the repo root ──────────────────
+# Allow running as `python run_demo.py` from the repo root
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.encoding import configure_utf8_stdio
@@ -30,7 +30,7 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    pass  # python-dotenv is optional; user can export GEMINI_API_KEY manually
+    pass  # python dotenv is optional and users can export GEMINI_API_KEY manually
 
 import config
 from sentence_transformers import SentenceTransformer
@@ -43,36 +43,34 @@ from src.llm_client import LLMClient
 from src.rag_pipeline import NaiveRAGPipeline, QueryResult
 from src.logger import QueryLogger
 
-# ── Roles ─────────────────────────────────────────────────────────────────────
-LEGIT_USER = "alice"   # tenant_alpha; starts with full access, revoked mid-run
+# Roles
+LEGIT_USER = "alice"   # tenant alpha starts with full access and is revoked mid run
 ATTACKER   = "bob"     # tenant_beta; never had access to D in any session
 
-SESSION_ALICE_1 = "alice-session-1"   # pre- and immediately post-revocation
+SESSION_ALICE_1 = "alice-session-1"   # before and immediately after revocation
 SESSION_ALICE_2 = "alice-session-2"   # fresh session, cache still warm
 SESSION_BOB     = "bob-session-1"
 
-TARGET_DOC = "doc_A6"  # D — the sensitive Project Nightingale document
+TARGET_DOC = "doc_A6"  # D the sensitive Project Nightingale document
 
-# ── Queries ───────────────────────────────────────────────────────────────────
+# Queries
 # Q_PRIMARY: used by Alice in Step 2 and by Bob in Step 6.
-# Exact same phrasing → guaranteed cache hit from Alice's session.
+# Exact same phrasing guarantees cache hit from Alice's session.
 Q_PRIMARY    = "What are the details of Project Nightingale and its clinical trial findings?"
 # Q_PARAPHRASE: different surface form but same semantic intent.
 # Used in Step 5 to test whether cache catches paraphrases.
 Q_PARAPHRASE = "Can you summarise the Nightingale project outcomes and trial results?"
 # Q_GHOST: topic that genuinely does not exist anywhere in the corpus.
-# Used in Step 7 as the true-negative baseline for the side-channel comparison.
+# Used in Step 7 as the true negative baseline for the side channel comparison.
 Q_GHOST      = "What is Meridian Corp's partnership with the Andromeda Mining Consortium?"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 def setup() -> tuple[AccessControlStore, NaiveRAGPipeline, QueryLogger]:
-# ══════════════════════════════════════════════════════════════════════════════
     print("\n" + "=" * 68)
     print("  RAG LEAKAGE MVP — NAIVE PIPELINE PROOF-OF-CONCEPT")
     print("=" * 68)
 
-    # ── Corpus ─────────────────────────────────────────────────────────────────
+    # Corpus
     print("\n[Setup] Loading corpus ...")
     docs = load_corpus(config.CORPUS_DIR)
     doc_meta = {
@@ -85,7 +83,7 @@ def setup() -> tuple[AccessControlStore, NaiveRAGPipeline, QueryLogger]:
         tag = "RESTRICTED" if d["restricted"] else "public  "
         print(f"         [{tag}] {d['tenant_id']}/{d['doc_id']} — {d['title']}")
 
-    # ── RBAC ───────────────────────────────────────────────────────────────────
+    # RBAC
     rbac = AccessControlStore()
     alpha_docs      = [d["doc_id"] for d in docs if d["tenant_id"] == "tenant_alpha"]
     beta_public_docs = [d["doc_id"] for d in docs if d["tenant_id"] == "tenant_beta" and not d["restricted"]]
@@ -98,17 +96,17 @@ def setup() -> tuple[AccessControlStore, NaiveRAGPipeline, QueryLogger]:
     print(f"\n[Setup] RBAC: {LEGIT_USER} → {sorted(alpha_docs)} (ALL alpha docs, incl. D={TARGET_DOC})")
     print(f"[Setup] RBAC: {ATTACKER}   → {sorted(beta_public_docs)} (beta-public only; D={TARGET_DOC} NEVER granted)")
 
-    # ── Embedding model (shared instance) ─────────────────────────────────────
+    # Embedding model
     print(f"\n[Setup] Loading embedding model '{config.EMBEDDING_MODEL}' ...")
     embedder = SentenceTransformer(config.EMBEDDING_MODEL)
 
-    # ── Vector index ───────────────────────────────────────────────────────────
+    # Vector index
     print("[Setup] Building vector index (first run encodes all docs) ...")
     index = VectorIndex(str(config.CHROMA_DIR), embedder)
     index.add_documents(docs)
     print(f"[Setup] Vector index ready — {index.count()} documents indexed (flat, no tenant isolation)")
 
-    # ── Pipeline components ────────────────────────────────────────────────────
+    # Pipeline components
     cache  = SemanticCache(ttl_seconds=config.CACHE_TTL_SECONDS,
                            sim_threshold=config.CACHE_SIM_THRESHOLD)
     memory = SessionMemory(max_turns=config.MEMORY_MAX_TURNS)
@@ -130,9 +128,7 @@ def setup() -> tuple[AccessControlStore, NaiveRAGPipeline, QueryLogger]:
     return rbac, pipeline, logger
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 def print_result(step: str, actor: str, r: QueryResult) -> None:
-# ══════════════════════════════════════════════════════════════════════════════
     cache_tag     = " [CACHE HIT ⚡]"      if r.cache_hit               else ""
     restrict_tag  = " [⚠ RESTRICTED CONTENT TOUCHED]" if r.ground_truth_restricted else ""
     print(f"\n  [{step}] actor={actor}{cache_tag}{restrict_tag}")
@@ -144,15 +140,11 @@ def print_result(step: str, actor: str, r: QueryResult) -> None:
     print(f"  response: {preview}{suffix}")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 def run_demo() -> None:
-# ══════════════════════════════════════════════════════════════════════════════
     rbac, pipeline, logger = setup()
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # STEP 2 — Baseline: U queries D with valid access
+    # STEP 2 Baseline U queries D with valid access
     # Expected: D is retrieved, LLM quotes its content. Cache populated.
-    # ──────────────────────────────────────────────────────────────────────────
     sep()
     print("STEP 2 — Baseline: alice queries D with valid access")
     print(f"         query: \"{Q_PRIMARY}\"")
@@ -161,9 +153,8 @@ def run_demo() -> None:
     print_result("Step 2", LEGIT_USER, r2)
     assert not r2.cache_hit, "Step 2 should be a cache miss (first query)"
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # STEP 3 — Revoke alice's access to D (RBAC only — no cache/memory flush)
-    # ──────────────────────────────────────────────────────────────────────────
+    # STEP 3 Revoke alice's access to D
+    # RBAC only with no cache or memory flush
     sep()
     print("STEP 3 — REVOCATION EVENT")
     print(f"         rbac.revoke({LEGIT_USER!r}, {TARGET_DOC!r})")
@@ -174,10 +165,8 @@ def run_demo() -> None:
     print("         [!] Vector index     → NOT changed  (naive flaw #2)")
     print(f"         alice now has access to: {sorted(rbac.accessible_docs(LEGIT_USER))}")
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # STEP 4 — Immediate re-probe: same session, same query
+    # STEP 4 Immediate probe again in the same session with the same query
     # Expected leakage: cache returns Step 2 response without RBAC check.
-    # ──────────────────────────────────────────────────────────────────────────
     sep()
     print("STEP 4 — Post-revocation re-probe (same session, identical query)")
     print("         → tests: semantic cache leak")
@@ -192,10 +181,8 @@ def run_demo() -> None:
         print("\n  *** TEMPORAL LEAKAGE — MEMORY: response contains restricted "
               "content surfaced via session memory! ***")
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # STEP 5 — Delayed re-probe: new session, paraphrased query
+    # STEP 5 Delayed probe again in a new session with a paraphrased query
     # Expected leakage: cache hits on the paraphrase (sim ≥ threshold).
-    # ──────────────────────────────────────────────────────────────────────────
     sep()
     print("STEP 5 — Post-revocation re-probe (NEW session, paraphrased query)")
     print("         → tests: semantic cache leak across session boundaries")
@@ -208,10 +195,8 @@ def run_demo() -> None:
               f"matched cache with sim={r5.similarity_score:.4f}; revoked user "
               "received restricted content in a brand-new session! ***")
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # STEP 6 — Cross-tenant attacker probe (topic exists, doc is restricted)
-    # Same exact phrasing as Q_PRIMARY → guaranteed cache hit if cache is warm.
-    # ──────────────────────────────────────────────────────────────────────────
+    # STEP 6 Cross tenant attacker probe
+    # Same exact phrasing as Q_PRIMARY guarantees cache hit if cache is warm.
     sep()
     print("STEP 6 — Attacker (bob, tenant_beta) probes D's topic")
     print("         Same phrasing as Step 2 → will hit alice's cached response")
@@ -227,9 +212,7 @@ def run_demo() -> None:
         print(f"\n  *** SIDE-CHANNEL: attacker sees sim={r6.similarity_score:.4f} "
               "for a restricted doc → existence inferable from score alone ***")
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # STEP 7 — Attacker queries a genuinely non-existent topic (true negative)
-    # ──────────────────────────────────────────────────────────────────────────
+    # STEP 7 Attacker queries a genuinely absent topic
     sep()
     print("STEP 7 — Attacker probes a non-existent topic (true-negative baseline)")
     print(f"         query: \"{Q_GHOST}\"")
@@ -237,9 +220,7 @@ def run_demo() -> None:
                         step_label="step7_attacker_nonexistent")
     print_result("Step 7", ATTACKER, r7)
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # STEP 8 — Side-channel comparison table
-    # ──────────────────────────────────────────────────────────────────────────
+    # STEP 8 Side channel comparison table
     sep()
     print("STEP 8 — Side-channel comparison: Step 6 (D exists) vs Step 7 (nothing exists)")
     row6 = logger.get_by_step("step6_attacker_exists")
@@ -267,16 +248,12 @@ def run_demo() -> None:
         row("Latency (ms)",    row6.latency_ms,        row7.latency_ms,       50.0)
         row("Refusal type",    row6.refusal_type or "—", row7.refusal_type or "—", None)
 
-    # ──────────────────────────────────────────────────────────────────────────
     # Evidence log
-    # ──────────────────────────────────────────────────────────────────────────
     sep()
     csv_path = config.RESULTS_DIR / "run_log.csv"
     logger.dump_csv(csv_path)
 
-    # ──────────────────────────────────────────────────────────────────────────
     # Summary
-    # ──────────────────────────────────────────────────────────────────────────
     all_rows = logger.rows()
     temporal_cache_leaked = any(
         r.cache_hit and r.ground_truth_restricted
@@ -304,13 +281,8 @@ def run_demo() -> None:
     print(f"\n  Evidence log: {csv_path.resolve()}")
     print()
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
 def sep() -> None:
     print("\n" + "─" * 68)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     run_demo()

@@ -1,22 +1,21 @@
 """
-vector_index.py — Flat ChromaDB vector index (no per-tenant partitioning).
+vector_index.py Flat ChromaDB vector index with no per tenant partitioning.
 
 All documents from all tenants live in a single ChromaDB collection.
 RBAC filtering is done *after* retrieval in the pipeline layer, which means:
-  - Similarity scores for restricted docs are computed (and logged) for every
+  * Similarity scores for restricted docs are computed and logged for every
     query regardless of the requester's access rights.
-  - Post-revocation, the vector index still ranks the revoked document
-    highly for relevant queries — there is no re-indexing step.
+  * After revocation, the vector index still ranks the revoked document
+    highly for relevant queries. There is no reindexing step.
 
 This "flat index" design is the second naive vulnerability: it leaks
 existence and relevance signals through raw similarity scores.
 
 Public API
-----------
     index = VectorIndex(chroma_dir=".chroma", embedder=<SentenceTransformer>)
     index.add_documents(docs)           # list[dict] from corpus_loader
     results = index.query(embedding, top_k=5)
-    # -> list of (doc_id, cosine_similarity, text)
+    # returns list of doc id similarity and text tuples
 """
 
 from __future__ import annotations
@@ -30,7 +29,6 @@ class VectorIndex:
     Thin wrapper around a ChromaDB persistent collection.
 
     Parameters
-    ----------
     chroma_dir : str
         Path to the ChromaDB persistence directory.
     embedder : SentenceTransformer
@@ -49,13 +47,13 @@ class VectorIndex:
     ) -> None:
         self._embedder = embedder
         self._client = chromadb.PersistentClient(path=chroma_dir)
-        # cosine distance: distance = 1 − similarity  →  similarity = 1 − distance
+        # cosine distance means distance equals one minus similarity
         self._collection = self._client.get_or_create_collection(
             name=collection_name,
             metadata={"hnsw:space": "cosine"},
         )
 
-    # ── Indexing ───────────────────────────────────────────────────────────────
+    # Indexing
 
     def add_documents(self, docs: list[dict]) -> None:
         """
@@ -86,7 +84,7 @@ class VectorIndex:
             ],
         )
 
-    # ── Querying ───────────────────────────────────────────────────────────────
+    # Querying
 
     def query(
         self,
@@ -94,13 +92,12 @@ class VectorIndex:
         top_k: int = 5,
     ) -> list[tuple[str, float, str]]:
         """
-        Retrieve the *top_k* nearest documents for a pre-computed embedding.
+        Retrieve the *top_k* nearest documents for a precomputed embedding.
 
         Returns
-        -------
         list of (doc_id, cosine_similarity, document_text)
             Ordered from most to least similar.
-            cosine_similarity ∈ [0, 1]  (higher = more similar).
+            cosine_similarity ranges from zero to one.
         """
         count = self._collection.count()
         if count == 0:
@@ -114,16 +111,16 @@ class VectorIndex:
         )
 
         ids       = results["ids"][0]
-        distances = results["distances"][0]   # cosine distance ∈ [0, 2]
+        distances = results["distances"][0]   # cosine distance ranges from zero to two
         documents = results["documents"][0]
 
-        # ChromaDB uses cosine *distance*; convert to similarity for readability.
+        # ChromaDB uses cosine distance so convert to similarity for readability.
         return [
             (doc_id, max(0.0, 1.0 - dist), text)
             for doc_id, dist, text in zip(ids, distances, documents)
         ]
 
-    # ── Metadata ───────────────────────────────────────────────────────────────
+    # Metadata
 
     def count(self) -> int:
         """Total number of documents in the index."""
