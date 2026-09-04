@@ -34,7 +34,11 @@ def main() -> None:
     print("  ENTERPRISE RAG SECURE MULTI-TENANT TESTBED -- FULL EXPERIMENT SUITE")
     print("=" * 76)
 
-    runner = ExperimentRunner(embedding_model="all-MiniLM-L6-v2")
+    repo_root = Path(__file__).parent
+    runner = ExperimentRunner(
+        embedding_model="all-MiniLM-L6-v2",
+        results_dir=repo_root / "results",
+    )
 
     # Run primary A/B comparison on single-doc revocation
     runner.run_ab_comparison(

@@ -1,7 +1,7 @@
 """
 session_memory.py -- Conversational Memory Buffer with Revocation Purging.
 
-Design (§3.5, §3.6, Threat T3):
+Design (§3.5, §3.6, Threat T3, Fix 3):
 - Manages multi-turn conversational session buffers per user/session.
 - Baseline mode: Stale conversational memory persists post-revocation. If an earlier
   turn quoted restricted documents, the LLM continues referencing them in-context (T3).
@@ -88,7 +88,7 @@ class SecureSessionMemory:
         self._sessions.pop(session_id, None)
         self._session_owners.pop(session_id, None)
 
-    # ---- Invalidation Hook (§3.6) -------------------------------------------
+    # ---- Invalidation Hook (§3.6, Fix 3) ------------------------------------
 
     def on_revocation(self, event: RevocationEvent) -> None:
         """
@@ -96,6 +96,7 @@ class SecureSessionMemory:
         Purges turns referencing revoked document IDs for the user's sessions.
         """
         revoked_docs = set(event.doc_ids)
+        purged_in_event = 0
 
         for session_id, owner in list(self._session_owners.items()):
             if owner != event.user_id:
@@ -105,6 +106,7 @@ class SecureSessionMemory:
                 # User completely offboarded -> drop all sessions
                 self.clear_session(session_id)
                 self.purged_turns_count += 1
+                purged_in_event += 1
                 continue
 
             turns = self._sessions.get(session_id, [])
@@ -113,14 +115,18 @@ class SecureSessionMemory:
                 # Check if turn references any revoked document
                 if any(d in revoked_docs for d in turn.referenced_doc_ids):
                     self.purged_turns_count += 1
+                    purged_in_event += 1
                     continue
-                # Also check if text explicitly mentions revoked doc IDs
+                # Also check if turn content explicitly mentions revoked doc IDs
                 if any(d in turn.content for d in revoked_docs):
                     self.purged_turns_count += 1
+                    purged_in_event += 1
                     continue
                 cleaned_turns.append(turn)
 
             self._sessions[session_id] = cleaned_turns
+
+        print(f"[SessionMemory] Revocation event '{event.event_type}' handled: {purged_in_event} turns purged for user '{event.user_id}'.")
 
     def session_ids(self) -> list[str]:
         return list(self._sessions.keys())

@@ -1,5 +1,5 @@
 """
-pipeline.py -- Multi-Tenant RAG Pipeline supporting Baseline and Mitigated Modes (§1, §3, §3.6).
+pipeline.py -- Multi-Tenant RAG Pipeline supporting Baseline and Mitigated Modes (§1, §3, §3.6, Fix 2, Fix 5).
 
 Architectural Modes:
 1. Baseline Mode:
@@ -15,6 +15,8 @@ Architectural Modes:
    - Cross-encoder reranker applied strictly to authorized candidates.
    - ACL-aware semantic cache with active invalidation eviction.
    - Revocation-purged conversational session memory.
+   - Refusals and empty retrievals are never cached under empty doc sets.
+   - Fast, non-blocking standardized refusal path to optimize latency overhead (Fix 5).
    - Metadata Normalization: score quantization, latency jitter, and standardized refusals.
 """
 
@@ -56,7 +58,7 @@ class PipelineQueryResult:
     ground_truth_restricted: bool
     log_row: Optional[StructuredLogRow] = None
 
-    # Backward compatibility properties for MVP test scripts
+    # Backward compatibility properties
     @property
     def similarity_score(self) -> float:
         return self.raw_similarity_score
@@ -145,6 +147,7 @@ class SecureRAGPipeline:
         strategy: str = "direct",
         tenant_id: Optional[str] = None,
         apply_latency_sleep: bool = False,
+        simulated_time_offset_s: float = 0.0,
     ) -> PipelineQueryResult:
         """
         Execute an end-to-end RAG query through the active mode pipeline.
@@ -154,7 +157,7 @@ class SecureRAGPipeline:
 
         user_tenant = tenant_id or self.rbac.get_user_tenant(actor)
         last_revocation_ts = self.rbac.last_revocation_time()
-        now_ts = time.time()
+        now_ts = time.time() + simulated_time_offset_s
         rel_time_s = max(0.0, now_ts - last_revocation_ts) if last_revocation_ts else 0.0
 
         # 1. Embed query
@@ -163,7 +166,7 @@ class SecureRAGPipeline:
         )
 
         # ---------------------------------------------------------------------
-        # 2. Semantic Cache Check
+        # 2. Semantic Cache Check (§3.4, §3.6, Fix 2)
         # ---------------------------------------------------------------------
         cache_result = self.cache.get(
             query_embedding=q_emb,
@@ -171,6 +174,7 @@ class SecureRAGPipeline:
             tenant_id=user_tenant if self.mode == "mitigated" else None,
             rbac=self.rbac if self.mode == "mitigated" else None,
             mode_override=self.mode,
+            current_time=now_ts,
         )
 
         if cache_result is not None:
@@ -250,7 +254,7 @@ class SecureRAGPipeline:
         accessible_set = self.rbac.accessible_docs(actor)
 
         if self.mode == "mitigated":
-            # Pre-filtered retrieval by tenant and RBAC
+            # Pre-filtered retrieval strictly within tenant & user ACL
             retrieved = self.vector_index.query(
                 query_embedding=q_emb,
                 top_k=self.top_k,
@@ -262,7 +266,7 @@ class SecureRAGPipeline:
             accessible = retrieved
             accessible_ids = all_retrieved_ids
         else:
-            # Baseline: Flat retrieval across all tenants/docs
+            # Baseline: Flat global retrieval across all tenants/docs
             retrieved = self.vector_index.query(
                 query_embedding=q_emb,
                 top_k=self.top_k,
@@ -293,7 +297,7 @@ class SecureRAGPipeline:
                 if self.rbac.has_access(actor, r[0])
             ]
 
-        # Determine raw refusal type
+        # Determine refusal conditions
         has_accessible_docs = len(docs_for_generation) > 0
         raw_refusal_type: Optional[str] = None
         if not has_accessible_docs:
@@ -303,23 +307,32 @@ class SecureRAGPipeline:
                 raw_refusal_type = "standardized_refusal"
 
         # ---------------------------------------------------------------------
-        # 5. Conversational Memory & LLM Generation
+        # 5. Conversational Memory & LLM Generation (Fix 5: Fast Refusal Path)
         # ---------------------------------------------------------------------
         memory_ctx = self.memory.get_context(session_id)
-        raw_response = self.llm.generate(memory_ctx, docs_for_generation, query_text)
 
-        # Store in cache & memory
-        self.cache.put(
-            query_embedding=q_emb,
-            response=raw_response,
-            doc_ids=accessible_ids,
-            tenant_id=user_tenant,
-            created_by=actor,
-        )
+        if self.mode == "mitigated" and not has_accessible_docs:
+            # Fast, normalized refusal path -- avoids expensive remote LLM calls for unauthorized queries
+            raw_response = self.normalizer.standard_refusal_message
+        else:
+            raw_response = self.llm.generate(memory_ctx, docs_for_generation, query_text)
+
+        # Store in cache & memory ONLY when valid accessible documents are returned (Fix 2)
+        if has_accessible_docs:
+            self.cache.put(
+                query_embedding=q_emb,
+                response=raw_response,
+                doc_ids=accessible_ids,
+                tenant_id=user_tenant,
+                created_by=actor,
+                timestamp=now_ts,
+            )
+
         self.memory.append(
             session_id=session_id,
             role="user",
             content=query_text,
+            referenced_doc_ids=accessible_ids,
             user_id=actor,
         )
         self.memory.append(

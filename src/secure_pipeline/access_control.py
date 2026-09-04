@@ -50,6 +50,9 @@ class AccessControlManager:
         self.mode = mode
         # user_id -> set of direct doc_ids
         self._user_doc_grants: dict[str, set[str]] = {}
+        # user_id -> set of doc_ids explicitly revoked from that user.
+        # These deny entries override role grants for single-document revocation tests.
+        self._user_doc_denies: dict[str, set[str]] = {}
         # user_id -> set of role names
         self._user_roles: dict[str, set[str]] = {}
         # role_name -> set of doc_ids
@@ -83,6 +86,7 @@ class AccessControlManager:
     def grant(self, user_id: str, doc_id: str) -> None:
         """Grant a user direct access to a document."""
         self._user_doc_grants.setdefault(user_id, set()).add(doc_id)
+        self._user_doc_denies.setdefault(user_id, set()).discard(doc_id)
 
     def grant_role(self, user_id: str, role: str) -> None:
         """Assign a role to a user."""
@@ -97,6 +101,7 @@ class AccessControlManager:
         """
         if user_id in self._user_doc_grants:
             self._user_doc_grants[user_id].discard(doc_id)
+        self._user_doc_denies.setdefault(user_id, set()).add(doc_id)
 
         tenant = self._user_tenants.get(user_id)
         event = RevocationEvent(
@@ -135,6 +140,7 @@ class AccessControlManager:
         """
         all_accessible = list(self.accessible_docs(user_id))
         self._user_doc_grants.pop(user_id, None)
+        self._user_doc_denies.pop(user_id, None)
         self._user_roles.pop(user_id, None)
         tenant = self._user_tenants.pop(user_id, None)
 
@@ -161,6 +167,8 @@ class AccessControlManager:
 
     def has_access(self, user_id: str, doc_id: str) -> bool:
         """Check if user currently has access directly or through roles."""
+        if doc_id in self._user_doc_denies.get(user_id, set()):
+            return False
         # Direct grant check
         if doc_id in self._user_doc_grants.get(user_id, set()):
             return True
@@ -175,7 +183,7 @@ class AccessControlManager:
         docs = self._user_doc_grants.get(user_id, set()).copy()
         for role in self._user_roles.get(user_id, set()):
             docs.update(self._role_docs.get(role, set()))
-        return docs
+        return docs - self._user_doc_denies.get(user_id, set())
 
     def last_revocation_time(self, user_id: Optional[str] = None) -> Optional[float]:
         """Return the timestamp of the latest revocation event."""
