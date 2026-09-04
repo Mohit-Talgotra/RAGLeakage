@@ -27,5 +27,5 @@ CACHE_SIM_THRESHOLD = 0.70  # cosine similarity floor for a cache hit
 MEMORY_MAX_TURNS = 20   # large buffer naive never purged on revocation
 
 # LLM
-LLM_MODEL       = "gemini-2.5-flash"
+LLM_MODEL       = "openai/gpt-oss-120b"
 LLM_TEMPERATURE = 0.0   # deterministic for reproducibility

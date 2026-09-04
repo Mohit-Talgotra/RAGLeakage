@@ -1,108 +1,87 @@
-# RAG Leakage MVP
+# Secure Multi-Tenant RAG: Temporal & Side-Channel Leakage Testbed
 
-Proof-of-concept demonstrating temporal and side-channel leakage in a
-**naive multi-tenant RAG pipeline** — no mitigations, deliberately vulnerable.
-
----
-
-## What this shows
-
-| Leakage class | Surface | Step |
-|---|---|---|
-| **Temporal (cache)** | Semantic cache returns pre-revocation response without re-checking RBAC | 4, 5 |
-| **Content leak (cross-tenant)** | Attacker receives alice's cached response containing D's restricted content | 6 |
-| **Side-channel** | Refusal type / similarity score / latency differ between "D exists" and "topic absent" | 8 |
+Simulation testbed and formal evaluation suite for researching and mitigating **temporal and side-channel leakage** in multi-tenant enterprise RAG systems.
 
 ---
 
-## Repository layout
+## 1. Overview & Project Structure
+
+The codebase is structured into two parallel implementations:
+- **`src/naive/`**: The Naive Baseline MVP demonstrating unmitigated temporal & side-channel vulnerabilities.
+- **`src/full/`**: The Complete Product Architecture implementing the full experimental matrix, multi-tenant isolation, proactive revocation invalidation, metadata normalization, cross-encoder reranking, black-box attacker probing, and formal metrics.
 
 ```
 RAGLeakage/
-├── corpus/
-│   ├── tenant_alpha/          # Meridian Corp (6 docs, 3 restricted)
-│   │   ├── doc_A1.txt  public
-│   │   ├── doc_A2.txt  public
-│   │   ├── doc_A3.txt  public
-│   │   ├── doc_A4.txt  RESTRICTED — executive compensation
-│   │   ├── doc_A5.txt  RESTRICTED — M&A targets
-│   │   └── doc_A6.txt  RESTRICTED — Project Nightingale trial data  <- D
-│   └── tenant_beta/           # Voltaic Systems (5 docs, 2 restricted)
-│       ├── doc_B1.txt  public
-│       ├── doc_B2.txt  public
-│       ├── doc_B3.txt  public
-│       ├── doc_B4.txt  RESTRICTED — security audit
-│       └── doc_B5.txt  RESTRICTED — data handling policy
+├── corpus/                    # Multi-tenant document corpus
+│   ├── tenant_alpha/          # Biopharma (Meridian Corp)
+│   └── tenant_beta/           # Energy-Tech (Voltaic Systems)
 ├── src/
-│   ├── corpus_loader.py   Reads YAML-frontmatter corpus files
-│   ├── rbac.py            AccessControlStore - grant / revoke / check
-│   ├── vector_index.py    VectorIndex - flat ChromaDB collection
-│   ├── semantic_cache.py  SemanticCache - cosine-sim dict cache, long TTL
-│   ├── memory.py          SessionMemory - rolling turn buffer, no purge
-│   ├── llm_client.py      LLMClient - Gemini + deterministic stub fallback
-│   ├── rag_pipeline.py    NaiveRAGPipeline - orchestrates all components
-│   └── logger.py          QueryLogger - structured CSV evidence log
-├── config.py              All tunable constants
-├── run_demo.py            Entry point - runs Steps 2-8, saves run_log.csv
+│   ├── naive/                 # MVP Baseline implementation (unmitigated)
+│   │   ├── rag_pipeline.py
+│   │   ├── semantic_cache.py
+│   │   └── ...
+│   └── full/                  # Full Architecture (§1-§8)
+│       ├── access_control.py  # RBAC + Revocation Event Bus (3 revocation types)
+│       ├── attacker.py        # Black-box probe suite (4 strategies) + EIA inference
+│       ├── corpus.py          # 3-tenant synthetic corpus & sensitive fact index
+│       ├── index_store.py     # Partitioned / ACL pre-filtered vector index
+│       ├── instrumentation.py # Structured logger for all observable & ground-truth signals
+│       ├── llm_client.py      # Generation with Gemini / OpenAI / deterministic stub
+│       ├── metrics.py         # Formal LM, LH, and EIA metric calculators
+│       ├── normalization.py   # Score quantization, latency jitter, uniform refusals
+│       ├── pipeline.py        # Unified pipeline supporting Baseline & Mitigated modes
+│       ├── reranker.py        # Cross-Encoder candidate reranker & confidence scoring
+│       ├── semantic_cache.py  # ACL-aware cache with revocation eviction hooks
+│       ├── session_memory.py  # Session memory with revocation purging
+│       └── experiment_runner.py # Automated A/B experiment matrix (§5)
+├── run_demo.py                # MVP single-run demo (using naive baseline)
+├── run_full_experiment.py     # Full A/B experiment suite (Baseline vs Mitigated)
 └── requirements.txt
 ```
 
 ---
 
-## Setup
+## 2. Threat Model & Mitigations
 
+| Threat | Vulnerability Mechanism (Baseline Mode) | Mitigation (Mitigated Mode) |
+|---|---|---|
+| **T1: Vector Index Staleness** | Flat global retrieval computes similarity across all tenants/docs. | Tenant isolation and ACL pre-filtering before vector scoring. |
+| **T2: Semantic Cache Staleness** | Cache lookup before RBAC; no eviction on revocation. | ACL-aware cache verification + immediate eviction on `ACCESS_REVOKED`. |
+| **T3: Conversational Memory** | Prior turn context retained post-revocation in session buffer. | Revocation hook purges turns referencing revoked document IDs. |
+| **T4: Similarity Score Side-Channel** | High raw cosine similarity leaks restricted doc existence. | Continuous scores quantized into coarse discrete bands (Low/Med/High). |
+| **T5: Reranker Confidence** | Raw cross-encoder confidence reveals candidate presence. | Reranking restricted to authorized docs; scores quantized. |
+| **T6: Latency Timing Side-Channel** | Cache hits and filtered misses exhibit distinct response times. | Uniform latency target padding with random jitter. |
+| **T7: Refusal Phrasing Oracle** | "Access denied" vs "Not found" reveals restricted existence. | Standardized refusal message across all empty/filtered outcomes. |
+
+---
+
+## 3. Formal Security Metrics (§4)
+
+- **Leakage Magnitude ($LM \in [0, 1]$)**: Fraction of sensitive ground-truth facts recovered post-revocation ($LM_{\text{total}}$, $LM_{\text{cache}}$, $LM_{\text{memory}}$, $LM_{\text{facts}}$).
+- **Leakage Half-Life ($LH$)**: Query count / time for $LM$ to decay to $50\%$ of $LM(0+)$.
+- **Existence Inference Accuracy ($EIA \in [0, 1]$)**: Attacker's classification accuracy, precision, recall, and F1 in inferring restricted document existence strictly from side-channel observations.
+
+---
+
+## 4. Setup & Running
+
+### Requirements
 ```bash
 pip install -r requirements.txt
 ```
 
-For real LLM responses (optional — the stub works without it):
-
+### LLM API Key (Groq / OpenAI / Gemini)
 ```bash
-# Create a .env file in the repo root
-echo "GEMINI_API_KEY=..." > .env
+# Set GROQ_API_KEY in .env (or export it in your shell):
+echo "GROQ_API_KEY=gsk_..." > .env
 ```
 
----
+### Running the Full Product Experiment Suite
+```bash
+python run_full_experiment.py
+```
 
-## Run
-
+### Running the MVP Baseline Demo
 ```bash
 python run_demo.py
 ```
-
-`run_demo.py` normalises Python stdout/stderr to UTF-8 at startup, so Windows
-terminals using a legacy code page should not crash on Unicode status symbols.
-
-The first run downloads `all-MiniLM-L6-v2` (~90 MB) and builds the ChromaDB
-index (stored in `.chroma/`). Subsequent runs reuse the index and are fast.
-
-Evidence is written to `results/run_log.csv`.
-
----
-
-## Three named naive flaws (in `src/rag_pipeline.py`)
-
-| # | Flaw | Location |
-|---|---|---|
-| 1 | **Cache before RBAC** - cache hit returned without access check | `NaiveRAGPipeline.query()` |
-| 2 | **Flat index, RBAC after retrieval** - similarity scores computed before filtering | `NaiveRAGPipeline.query()` |
-| 3 | **Session memory never purged on revocation** - stale context injected into LLM | `NaiveRAGPipeline.query()` |
-
----
-
-## Output columns (`results/run_log.csv`)
-
-| Column | Description |
-|---|---|
-| `timestamp` | ISO-8601 UTC |
-| `actor` | `alice` or `bob` |
-| `session_id` | session identifier |
-| `query` | raw query string |
-| `retrieved_doc_ids` | JSON list of ALL docs retrieved (pre-RBAC) |
-| `ground_truth_restricted` | `True` if any retrieved doc is tagged restricted |
-| `response_text` | full LLM / stub response |
-| `similarity_score` | highest cosine similarity among retrieved docs |
-| `latency_ms` | end-to-end query latency |
-| `refusal_type` | `access_denied` / `not_found` / empty |
-| `cache_hit` | `True` if response came from semantic cache |
-| `step_label` | which demo step produced this row |

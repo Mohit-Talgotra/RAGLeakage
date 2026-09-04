@@ -111,7 +111,7 @@ class QueryLogger:
             writer.writeheader()
             for row in self._rows:
                 writer.writerow(asdict(row))
-        print(f"[Logger] {len(self._rows)} rows → {out.resolve()}")
+        print(f"[Logger] {len(self._rows)} rows -> {out.resolve()}")
 
     # In process access
 
