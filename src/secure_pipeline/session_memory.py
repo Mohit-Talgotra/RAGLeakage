@@ -1,136 +1,116 @@
 """
-session_memory.py -- Conversational Memory Buffer with Revocation Purging.
+session_memory.py -- Per-session chat memory with rolling summaries (threat T3).
 
-Design (§3.5, §3.6, Threat T3, Fix 3):
-- Manages multi-turn conversational session buffers per user/session.
-- Baseline mode: Stale conversational memory persists post-revocation. If an earlier
-  turn quoted restricted documents, the LLM continues referencing them in-context (T3).
-- Mitigated mode:
-  - Invalidation Hook: on ACCESS_REVOKED, active user sessions are scanned and sanitized.
-    Any turns containing or generated from revoked doc_ids are pruned or scrubbed.
+Each session keeps recent turns verbatim. When a session grows past `summary_after`
+turns, everything except the last `keep_recent` turns is compressed into a single
+summary turn, as LangChain-style summary memory does. The summary keeps the key
+figures, so restricted content survives compression without naming any doc ID.
+
+Taint (see provenance.py):
+- a turn's taint is set by the pipeline from the response taint
+- a summary's taint is the union of the turns it replaced when taint is transitive,
+  and empty otherwise; this is the case that defeats an ID-match purge
+
+Mitigations:
+- memory_purge : eager; on ACCESS_REVOKED drop the user's turns whose taint intersects
+                 the revoked docs (offboarding drops all the user's sessions)
+- lazy_check   : on every read, drop turns whose taint the reader does not fully hold
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING
+import re
+from dataclasses import dataclass
 
-if TYPE_CHECKING:
-    from .access_control import RevocationEvent
+from .access_control import AccessControlManager, RevocationEvent
+from .provenance import EMPTY, Taint, taint_union
+
+_SENT_RE = re.compile(r"(?<=[.!?])\s+")
+_KEY_RE = re.compile(r"\d|[A-Z][a-z]+ [A-Z][a-z]+|codename")
 
 
 @dataclass(frozen=True)
 class Turn:
-    role: str                       # "user" | "assistant" | "system"
+    role: str            # "user" | "assistant" | "summary"
     content: str
-    referenced_doc_ids: list[str] = field(default_factory=list)
+    taint: Taint = EMPTY
 
 
-class SecureSessionMemory:
-    """
-    Conversational Session Memory with Revocation Purge Hooks.
+PREFIX_RE = re.compile(r"^(Summary of earlier conversation:|From our earlier conversation:|According to [^:]+:)\s*")
 
-    Parameters
-    ----------
-    max_turns : int
-        Maximum number of turns to keep per session (default: 20).
-    mode : str
-        "baseline" or "mitigated".
-    """
 
-    def __init__(self, max_turns: int = 20, mode: str = "baseline") -> None:
+def strip_prefixes(sentence: str) -> str:
+    """Remove generator/summary lead-ins so the same sentence is not stored twice."""
+    while True:
+        stripped = PREFIX_RE.sub("", sentence)
+        if stripped == sentence:
+            return sentence.strip()
+        sentence = stripped
+
+
+def summarize(turns: list[Turn], max_sentences: int = 12) -> str:
+    """Extractive summary: keep unique sentences that carry figures, names or codenames.
+    Sentences with figures are kept first when the budget is tight."""
+    picked: list[str] = []
+    for t in turns:
+        if t.role == "user":
+            continue
+        for s in _SENT_RE.split(t.content.replace("\n", " ")):
+            s = strip_prefixes(s)
+            if s and _KEY_RE.search(s) and s not in picked:
+                picked.append(s)
+    if len(picked) > max_sentences:
+        with_digits = [s for s in picked if any(ch.isdigit() for ch in s)]
+        rest = [s for s in picked if s not in with_digits]
+        keep = set((with_digits + rest)[:max_sentences])
+        picked = [s for s in picked if s in keep]
+    return "Summary of earlier conversation: " + " ".join(picked)
+
+
+class SessionMemory:
+    def __init__(self, acm: AccessControlManager, summary_after: int, keep_recent: int,
+                 transitive: bool, purge_on_revoke: bool, lazy_check: bool) -> None:
+        self.acm = acm
+        self.summary_after = summary_after
+        self.keep_recent = keep_recent
+        self.transitive = transitive
+        self.lazy_check = lazy_check
         self._sessions: dict[str, list[Turn]] = {}
-        self._session_owners: dict[str, str] = {}  # session_id -> user_id
-        self._max_turns = max_turns
-        self._mode = mode
-        self.purged_turns_count = 0
+        self._owner: dict[str, str] = {}
+        self.purged = 0
+        if purge_on_revoke:
+            acm.subscribe(self.on_revocation)
 
-    @property
-    def mode(self) -> str:
-        return self._mode
-
-    @mode.setter
-    def mode(self, value: str) -> None:
-        self._mode = value
-
-    # ---- Append / Read ------------------------------------------------------
-
-    def append(
-        self,
-        session_id: str,
-        role: str,
-        content: str,
-        referenced_doc_ids: Optional[list[str]] = None,
-        user_id: Optional[str] = None,
-    ) -> None:
-        """Append a conversational turn to a session."""
-        if user_id is not None:
-            self._session_owners[session_id] = user_id
-
+    def append(self, session_id: str, user_id: str, role: str, content: str, taint: Taint) -> None:
+        self._owner[session_id] = user_id
         turns = self._sessions.setdefault(session_id, [])
-        turns.append(
-            Turn(
-                role=role,
-                content=content,
-                referenced_doc_ids=list(referenced_doc_ids or []),
-            )
-        )
-        if len(turns) > self._max_turns:
-            self._sessions[session_id] = turns[-self._max_turns:]
+        turns.append(Turn(role, content, taint))
+        if self.summary_after and len(turns) > self.summary_after:
+            old, recent = turns[:-self.keep_recent], turns[-self.keep_recent:]
+            s_taint = taint_union(*(t.taint for t in old)) if self.transitive else EMPTY
+            self._sessions[session_id] = [Turn("summary", summarize(old), s_taint)] + recent
 
-    def get_context(self, session_id: str) -> list[dict]:
-        """Return message context list formatted for LLM."""
+    def context(self, session_id: str, user_id: str) -> list[Turn]:
         turns = self._sessions.get(session_id, [])
-        return [{"role": t.role, "content": t.content} for t in turns]
+        if self.lazy_check:
+            turns = [t for t in turns if self.acm.holds_all(user_id, t.taint)]
+        return list(turns)
 
-    def clear_session(self, session_id: str) -> None:
-        """Clear all turns for a specific session."""
-        self._sessions.pop(session_id, None)
-        self._session_owners.pop(session_id, None)
-
-    # ---- Invalidation Hook (§3.6, Fix 3) ------------------------------------
+    def turns(self, session_id: str) -> list[Turn]:
+        return list(self._sessions.get(session_id, []))
 
     def on_revocation(self, event: RevocationEvent) -> None:
-        """
-        Invalidation callback triggered on ACCESS_REVOKED in mitigated mode.
-        Purges turns referencing revoked document IDs for the user's sessions.
-        """
-        revoked_docs = set(event.doc_ids)
-        purged_in_event = 0
-
-        for session_id, owner in list(self._session_owners.items()):
+        for sid, owner in list(self._owner.items()):
             if owner != event.user_id:
                 continue
-
+            turns = self._sessions.get(sid, [])
             if event.event_type == "user_offboard":
-                # User completely offboarded -> drop all sessions
-                self.clear_session(session_id)
-                self.purged_turns_count += 1
-                purged_in_event += 1
-                continue
+                keep = []
+            else:
+                keep = [t for t in turns if not (t.taint & event.doc_ids)]
+            self.purged += len(turns) - len(keep)
+            self._sessions[sid] = keep
 
-            turns = self._sessions.get(session_id, [])
-            cleaned_turns: list[Turn] = []
-            for turn in turns:
-                # Check if turn references any revoked document
-                if any(d in revoked_docs for d in turn.referenced_doc_ids):
-                    self.purged_turns_count += 1
-                    purged_in_event += 1
-                    continue
-                # Also check if turn content explicitly mentions revoked doc IDs
-                if any(d in turn.content for d in revoked_docs):
-                    self.purged_turns_count += 1
-                    purged_in_event += 1
-                    continue
-                cleaned_turns.append(turn)
-
-            self._sessions[session_id] = cleaned_turns
-
-        print(f"[SessionMemory] Revocation event '{event.event_type}' handled: {purged_in_event} turns purged for user '{event.user_id}'.")
-
-    def session_ids(self) -> list[str]:
-        return list(self._sessions.keys())
-
-
-# Backward-compatible alias
-SessionMemory = SecureSessionMemory
+    def clear(self) -> None:
+        self._sessions.clear()
+        self._owner.clear()

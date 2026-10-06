@@ -1,0 +1,632 @@
+{
+  "tenants": [
+    {
+      "tenant_id": "t1",
+      "name": "Meridian Biopharma",
+      "industry": "biopharma",
+      "hq": "Cambridge, MA"
+    },
+    {
+      "tenant_id": "t2",
+      "name": "Voltaic Systems",
+      "industry": "energy",
+      "hq": "Austin, TX"
+    },
+    {
+      "tenant_id": "t3",
+      "name": "Apex Financial",
+      "industry": "fintech",
+      "hq": "New York, NY"
+    },
+    {
+      "tenant_id": "t4",
+      "name": "Northwind Logistics",
+      "industry": "logistics",
+      "hq": "Rotterdam, NL"
+    },
+    {
+      "tenant_id": "t5",
+      "name": "Helix Retail",
+      "industry": "retail",
+      "hq": "Seattle, WA"
+    }
+  ],
+  "users": [
+    {
+      "user_id": "t1_sven",
+      "tenant_id": "t1",
+      "role": "employee",
+      "groups": [
+        "t1_all",
+        "t1_finance",
+        "t1_staff"
+      ]
+    },
+    {
+      "user_id": "t1_mira",
+      "tenant_id": "t1",
+      "role": "employee",
+      "groups": [
+        "t1_all",
+        "t1_legal",
+        "t1_security",
+        "t1_staff"
+      ]
+    },
+    {
+      "user_id": "t1_elif",
+      "tenant_id": "t1",
+      "role": "employee",
+      "groups": [
+        "t1_all",
+        "t1_rnd",
+        "t1_staff"
+      ]
+    },
+    {
+      "user_id": "t1_beatriz",
+      "tenant_id": "t1",
+      "role": "employee",
+      "groups": [
+        "t1_all",
+        "t1_exec",
+        "t1_finance",
+        "t1_staff"
+      ]
+    },
+    {
+      "user_id": "t1_hana",
+      "tenant_id": "t1",
+      "role": "employee",
+      "groups": [
+        "t1_all",
+        "t1_legal",
+        "t1_security",
+        "t1_staff"
+      ]
+    },
+    {
+      "user_id": "t1_cyrus",
+      "tenant_id": "t1",
+      "role": "employee",
+      "groups": [
+        "t1_all",
+        "t1_hr",
+        "t1_rnd",
+        "t1_staff"
+      ]
+    },
+    {
+      "user_id": "t1_ivan",
+      "tenant_id": "t1",
+      "role": "contractor",
+      "groups": [
+        "t1_all"
+      ]
+    },
+    {
+      "user_id": "t1_luis",
+      "tenant_id": "t1",
+      "role": "contractor",
+      "groups": [
+        "t1_all"
+      ]
+    },
+    {
+      "user_id": "t2_elif",
+      "tenant_id": "t2",
+      "role": "employee",
+      "groups": [
+        "t2_all",
+        "t2_exec",
+        "t2_finance",
+        "t2_staff"
+      ]
+    },
+    {
+      "user_id": "t2_ximena",
+      "tenant_id": "t2",
+      "role": "employee",
+      "groups": [
+        "t2_all",
+        "t2_legal",
+        "t2_staff"
+      ]
+    },
+    {
+      "user_id": "t2_nadia",
+      "tenant_id": "t2",
+      "role": "employee",
+      "groups": [
+        "t2_all",
+        "t2_hr",
+        "t2_rnd",
+        "t2_staff"
+      ]
+    },
+    {
+      "user_id": "t2_hana",
+      "tenant_id": "t2",
+      "role": "employee",
+      "groups": [
+        "t2_all",
+        "t2_exec",
+        "t2_finance",
+        "t2_staff"
+      ]
+    },
+    {
+      "user_id": "t2_felix",
+      "tenant_id": "t2",
+      "role": "employee",
+      "groups": [
+        "t2_all",
+        "t2_legal",
+        "t2_security",
+        "t2_staff"
+      ]
+    },
+    {
+      "user_id": "t2_mira",
+      "tenant_id": "t2",
+      "role": "employee",
+      "groups": [
+        "t2_all",
+        "t2_hr",
+        "t2_rnd",
+        "t2_staff"
+      ]
+    },
+    {
+      "user_id": "t2_cyrus",
+      "tenant_id": "t2",
+      "role": "contractor",
+      "groups": [
+        "t2_all"
+      ]
+    },
+    {
+      "user_id": "t2_jonas",
+      "tenant_id": "t2",
+      "role": "contractor",
+      "groups": [
+        "t2_all"
+      ]
+    },
+    {
+      "user_id": "t3_victor",
+      "tenant_id": "t3",
+      "role": "employee",
+      "groups": [
+        "t3_all",
+        "t3_finance",
+        "t3_staff"
+      ]
+    },
+    {
+      "user_id": "t3_mateo",
+      "tenant_id": "t3",
+      "role": "employee",
+      "groups": [
+        "t3_all",
+        "t3_legal",
+        "t3_staff"
+      ]
+    },
+    {
+      "user_id": "t3_sven",
+      "tenant_id": "t3",
+      "role": "employee",
+      "groups": [
+        "t3_all",
+        "t3_hr",
+        "t3_rnd",
+        "t3_staff"
+      ]
+    },
+    {
+      "user_id": "t3_grace",
+      "tenant_id": "t3",
+      "role": "employee",
+      "groups": [
+        "t3_all",
+        "t3_exec",
+        "t3_staff"
+      ]
+    },
+    {
+      "user_id": "t3_tara",
+      "tenant_id": "t3",
+      "role": "employee",
+      "groups": [
+        "t3_all",
+        "t3_security",
+        "t3_staff"
+      ]
+    },
+    {
+      "user_id": "t3_wen",
+      "tenant_id": "t3",
+      "role": "employee",
+      "groups": [
+        "t3_all",
+        "t3_hr",
+        "t3_rnd",
+        "t3_staff"
+      ]
+    },
+    {
+      "user_id": "t3_lena",
+      "tenant_id": "t3",
+      "role": "contractor",
+      "groups": [
+        "t3_all"
+      ]
+    },
+    {
+      "user_id": "t3_mira",
+      "tenant_id": "t3",
+      "role": "contractor",
+      "groups": [
+        "t3_all"
+      ]
+    },
+    {
+      "user_id": "t4_luis",
+      "tenant_id": "t4",
+      "role": "employee",
+      "groups": [
+        "t4_all",
+        "t4_exec",
+        "t4_finance",
+        "t4_staff"
+      ]
+    },
+    {
+      "user_id": "t4_emeka",
+      "tenant_id": "t4",
+      "role": "employee",
+      "groups": [
+        "t4_all",
+        "t4_legal",
+        "t4_staff"
+      ]
+    },
+    {
+      "user_id": "t4_arjun",
+      "tenant_id": "t4",
+      "role": "employee",
+      "groups": [
+        "t4_all",
+        "t4_rnd",
+        "t4_staff"
+      ]
+    },
+    {
+      "user_id": "t4_elif",
+      "tenant_id": "t4",
+      "role": "employee",
+      "groups": [
+        "t4_all",
+        "t4_exec",
+        "t4_finance",
+        "t4_staff"
+      ]
+    },
+    {
+      "user_id": "t4_dana",
+      "tenant_id": "t4",
+      "role": "employee",
+      "groups": [
+        "t4_all",
+        "t4_security",
+        "t4_staff"
+      ]
+    },
+    {
+      "user_id": "t4_chen",
+      "tenant_id": "t4",
+      "role": "employee",
+      "groups": [
+        "t4_all",
+        "t4_hr",
+        "t4_staff"
+      ]
+    },
+    {
+      "user_id": "t4_jonas",
+      "tenant_id": "t4",
+      "role": "contractor",
+      "groups": [
+        "t4_all"
+      ]
+    },
+    {
+      "user_id": "t4_priya",
+      "tenant_id": "t4",
+      "role": "contractor",
+      "groups": [
+        "t4_all"
+      ]
+    },
+    {
+      "user_id": "t5_beatriz",
+      "tenant_id": "t5",
+      "role": "employee",
+      "groups": [
+        "t5_all",
+        "t5_finance",
+        "t5_staff"
+      ]
+    },
+    {
+      "user_id": "t5_luis",
+      "tenant_id": "t5",
+      "role": "employee",
+      "groups": [
+        "t5_all",
+        "t5_legal",
+        "t5_security",
+        "t5_staff"
+      ]
+    },
+    {
+      "user_id": "t5_bilal",
+      "tenant_id": "t5",
+      "role": "employee",
+      "groups": [
+        "t5_all",
+        "t5_rnd",
+        "t5_staff"
+      ]
+    },
+    {
+      "user_id": "t5_hana",
+      "tenant_id": "t5",
+      "role": "employee",
+      "groups": [
+        "t5_all",
+        "t5_exec",
+        "t5_finance",
+        "t5_staff"
+      ]
+    },
+    {
+      "user_id": "t5_chen",
+      "tenant_id": "t5",
+      "role": "employee",
+      "groups": [
+        "t5_all",
+        "t5_legal",
+        "t5_security",
+        "t5_staff"
+      ]
+    },
+    {
+      "user_id": "t5_cyrus",
+      "tenant_id": "t5",
+      "role": "employee",
+      "groups": [
+        "t5_all",
+        "t5_hr",
+        "t5_rnd",
+        "t5_staff"
+      ]
+    },
+    {
+      "user_id": "t5_tara",
+      "tenant_id": "t5",
+      "role": "contractor",
+      "groups": [
+        "t5_all"
+      ]
+    },
+    {
+      "user_id": "t5_wen",
+      "tenant_id": "t5",
+      "role": "contractor",
+      "groups": [
+        "t5_all"
+      ]
+    }
+  ],
+  "groups": {
+    "t1_all": [
+      "t1_sven",
+      "t1_mira",
+      "t1_elif",
+      "t1_beatriz",
+      "t1_hana",
+      "t1_cyrus",
+      "t1_ivan",
+      "t1_luis"
+    ],
+    "t1_staff": [
+      "t1_sven",
+      "t1_mira",
+      "t1_elif",
+      "t1_beatriz",
+      "t1_hana",
+      "t1_cyrus"
+    ],
+    "t1_finance": [
+      "t1_beatriz",
+      "t1_sven"
+    ],
+    "t1_legal": [
+      "t1_hana",
+      "t1_mira"
+    ],
+    "t1_rnd": [
+      "t1_cyrus",
+      "t1_elif"
+    ],
+    "t1_exec": [
+      "t1_beatriz"
+    ],
+    "t1_security": [
+      "t1_hana",
+      "t1_mira"
+    ],
+    "t1_hr": [
+      "t1_cyrus"
+    ],
+    "t2_all": [
+      "t2_elif",
+      "t2_ximena",
+      "t2_nadia",
+      "t2_hana",
+      "t2_felix",
+      "t2_mira",
+      "t2_cyrus",
+      "t2_jonas"
+    ],
+    "t2_staff": [
+      "t2_elif",
+      "t2_ximena",
+      "t2_nadia",
+      "t2_hana",
+      "t2_felix",
+      "t2_mira"
+    ],
+    "t2_finance": [
+      "t2_elif",
+      "t2_hana"
+    ],
+    "t2_legal": [
+      "t2_felix",
+      "t2_ximena"
+    ],
+    "t2_rnd": [
+      "t2_mira",
+      "t2_nadia"
+    ],
+    "t2_exec": [
+      "t2_elif",
+      "t2_hana"
+    ],
+    "t2_security": [
+      "t2_felix"
+    ],
+    "t2_hr": [
+      "t2_mira",
+      "t2_nadia"
+    ],
+    "t3_all": [
+      "t3_victor",
+      "t3_mateo",
+      "t3_sven",
+      "t3_grace",
+      "t3_tara",
+      "t3_wen",
+      "t3_lena",
+      "t3_mira"
+    ],
+    "t3_staff": [
+      "t3_victor",
+      "t3_mateo",
+      "t3_sven",
+      "t3_grace",
+      "t3_tara",
+      "t3_wen"
+    ],
+    "t3_finance": [
+      "t3_victor"
+    ],
+    "t3_legal": [
+      "t3_mateo"
+    ],
+    "t3_rnd": [
+      "t3_sven",
+      "t3_wen"
+    ],
+    "t3_exec": [
+      "t3_grace"
+    ],
+    "t3_security": [
+      "t3_tara"
+    ],
+    "t3_hr": [
+      "t3_sven",
+      "t3_wen"
+    ],
+    "t4_all": [
+      "t4_luis",
+      "t4_emeka",
+      "t4_arjun",
+      "t4_elif",
+      "t4_dana",
+      "t4_chen",
+      "t4_jonas",
+      "t4_priya"
+    ],
+    "t4_staff": [
+      "t4_luis",
+      "t4_emeka",
+      "t4_arjun",
+      "t4_elif",
+      "t4_dana",
+      "t4_chen"
+    ],
+    "t4_finance": [
+      "t4_elif",
+      "t4_luis"
+    ],
+    "t4_legal": [
+      "t4_emeka"
+    ],
+    "t4_rnd": [
+      "t4_arjun"
+    ],
+    "t4_exec": [
+      "t4_elif",
+      "t4_luis"
+    ],
+    "t4_security": [
+      "t4_dana"
+    ],
+    "t4_hr": [
+      "t4_chen"
+    ],
+    "t5_all": [
+      "t5_beatriz",
+      "t5_luis",
+      "t5_bilal",
+      "t5_hana",
+      "t5_chen",
+      "t5_cyrus",
+      "t5_tara",
+      "t5_wen"
+    ],
+    "t5_staff": [
+      "t5_beatriz",
+      "t5_luis",
+      "t5_bilal",
+      "t5_hana",
+      "t5_chen",
+      "t5_cyrus"
+    ],
+    "t5_finance": [
+      "t5_beatriz",
+      "t5_hana"
+    ],
+    "t5_legal": [
+      "t5_chen",
+      "t5_luis"
+    ],
+    "t5_rnd": [
+      "t5_bilal",
+      "t5_cyrus"
+    ],
+    "t5_exec": [
+      "t5_hana"
+    ],
+    "t5_security": [
+      "t5_chen",
+      "t5_luis"
+    ],
+    "t5_hr": [
+      "t5_cyrus"
+    ]
+  }
+}

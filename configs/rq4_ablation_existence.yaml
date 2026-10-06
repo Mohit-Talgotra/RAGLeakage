@@ -1,0 +1,23 @@
+# RQ4 (inference side): which normalization buys what, and which "fixes" re-open channels.
+# fast_refusal skips the LLM on refusals (a timing oracle); pad30 is the legacy 30 ms floor.
+# With the ACL pre-filter on, a target is invisible to the attacker in both worlds, so the
+# metadata channels can only differ through the shared cache; acl_prefilter: false covers
+# deployments that retrieve flat and post-filter, where every channel is in play.
+name: rq4_ablation_existence
+experiment: existence
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  preset: full
+  sync: live
+  targets_per_tenant: 12
+grid:
+  acl_prefilter: [true, false]
+  ablate: [none, score_quantize, uniform_refusal, latency_pad, cache_lazy_check]
+variants:
+  - {variant: as_is}
+  - {variant: fast_refusal, fast_refusal: true}
+  - {variant: pad30, pad_strategy: floor, pad_ms: 30}
+  - {variant: deadline2s, pad_strategy: deadline, pad_ms: 2000}

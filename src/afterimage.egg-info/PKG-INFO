@@ -1,3 +1,22 @@
+Metadata-Version: 2.4
+Name: afterimage
+Version: 0.2.0
+Summary: Afterimage: measuring post-revocation and metadata leakage in multi-tenant RAG
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: chromadb>=1.5.9
+Requires-Dist: google-genai>=1.0.0
+Requires-Dist: groq>=1.7.0
+Requires-Dist: matplotlib>=3.9
+Requires-Dist: numpy>=2.0
+Requires-Dist: openai>=3.8.0
+Requires-Dist: pandas>=3.0.5
+Requires-Dist: python-dotenv>=1.2.3
+Requires-Dist: pyyaml>=6.0.3
+Requires-Dist: scikit-learn>=1.5
+Requires-Dist: scipy>=1.13
+Requires-Dist: sentence-transformers>=6.0.0
+
 # Afterimage: post-revocation and metadata leakage in multi-tenant RAG
 
 Afterimage is a measurement testbed for one question: **when you revoke someone's access to a document, how long do the copies keep leaking?**

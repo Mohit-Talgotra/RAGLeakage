@@ -1,0 +1,14 @@
+# RQ4 (leakage side): leave-one-out from the full preset, plus the backfiring variants.
+name: rq4_ablation_revocation
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  preset: full
+  sync: event:0.05:86400        # lossy webhooks, daily backstop crawl
+  events: 40
+grid:
+  ablate: [none, acl_prefilter, live_acl_check, cache_evict, cache_lazy_check, memory_purge,
+           memory_lazy_check, taint_transitive]

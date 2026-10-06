@@ -1,321 +1,172 @@
 """
-metrics.py -- Formalized Security and Performance Metrics Calculator (§4, Fix 1, Fix 3).
+metrics.py -- Leakage, survival, inference and utility metrics with bootstrap CIs (§4).
 
-Implements:
-1. Leakage Magnitude (LM): Fraction of restricted ground-truth facts recovered post-revocation.
-   Broken down by artifact (Index, Cache, Memory, Total).
-2. Leakage Half-Life (LH): Decay point t where LM(t) = 0.5 * LM(0+).
-3. Existence Inference Accuracy (EIA): Binary classification accuracy, precision, recall,
-   and F1-score of attacker side-channel existence inferences.
-4. Latency Statistics: p50 and p95 latency.
-5. Probe Execution Diagnostics: Counts and logs exercised probe paths (Fix 3).
+- LM  (leakage magnitude): fraction of a revoked target's secrets (facts + canary)
+      disclosed by any post-revocation probe, per revocation event.
+- Leakage lifetime / LH: per event, the probe time at which leakage stopped for good
+      (right-censored at the horizon if it never stopped). Aggregated with a
+      Kaplan-Meier survival curve; LH is the KM median.
+- EIA: AUC, TPR at a fixed low FPR, and balanced accuracy for existence inference.
+- Utility: Recall@k, nDCG@k, answer correctness, over-refusal, latency percentiles,
+      cache hit rate.
+
+Confidence intervals are percentile bootstraps over the unit of analysis
+(revocation events, probes, queries). Paired comparisons resample matched pairs.
 """
 
 from __future__ import annotations
 
-import json
 import math
-from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
+from typing import Callable, Optional, Sequence
 
-if TYPE_CHECKING:
-    from .attacker import AttackerInference, ProbeDefinition
-    from .corpus import CorpusManager
-    from .instrumentation import StructuredLogRow
+import numpy as np
 
 
-@dataclass
-class SecurityMetricsReport:
-    """Formalized evaluation metrics bundle for a test suite run."""
-    mode: str
-    total_probes: int
-    leakage_magnitude_total: float       # LM in [0.0, 1.0]
-    leakage_magnitude_cache: float       # LM attributable to cache hits
-    leakage_magnitude_memory: float      # LM attributable to conversational memory
-    leakage_magnitude_facts: float       # Fraction of ground-truth sensitive facts leaked
-    leakage_half_life_queries: float     # LH in query-count units
-    existence_inference_accuracy: float  # EIA in [0.0, 1.0]
-    eia_precision: float
-    eia_recall: float
-    eia_f1: float
-    p50_latency_ms: float
-    p95_latency_ms: float
-    raw_score_leak_count: int
-    # Diagnostic counts (Fix 3)
-    factual_probes_count: int = 0
-    memory_probes_count: int = 0
-    restricted_target_probes_count: int = 0
+# ---- Bootstrap ----------------------------------------------------------------
+
+def bootstrap_ci(values: Sequence[float], stat: Callable = np.mean, n: int = 2000,
+                 alpha: float = 0.05, seed: int = 0) -> tuple[float, float, float]:
+    """(point, lo, hi) percentile bootstrap."""
+    v = np.asarray(values, dtype=float)
+    if len(v) == 0:
+        return (math.nan, math.nan, math.nan)
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(v), size=(n, len(v)))
+    boots = np.array([stat(v[i]) for i in idx])
+    return float(stat(v)), float(np.nanpercentile(boots, 100 * alpha / 2)), float(np.nanpercentile(boots, 100 * (1 - alpha / 2)))
 
 
-LOWER_IS_BETTER = "lower"
-HIGHER_IS_BETTER = "higher"
-COST_ONLY = "cost"
-
-METRIC_DIRECTIONS: dict[str, str] = {
-    "Leakage Magnitude (LM_total)": LOWER_IS_BETTER,
-    "LM (Cache Surface)": LOWER_IS_BETTER,
-    "LM (Memory Surface)": LOWER_IS_BETTER,
-    "LM (Factual Recovery)": LOWER_IS_BETTER,
-    "Existence Inference Acc (EIA)": LOWER_IS_BETTER,
-    "EIA Precision": LOWER_IS_BETTER,
-    "EIA Recall": LOWER_IS_BETTER,
-    "EIA F1-Score": LOWER_IS_BETTER,
-    "Raw Score Leaks (T4)": LOWER_IS_BETTER,
-    "Leakage Half-Life (LH)": HIGHER_IS_BETTER,
-    "p50 Response Latency": COST_ONLY,
-    "p95 Response Latency": COST_ONLY,
-}
+def paired_bootstrap(a: Sequence[float], b: Sequence[float], n: int = 2000, seed: int = 0) -> dict:
+    """Mean difference a-b over matched pairs, its 95% CI, and a two-sided bootstrap p-value."""
+    d = np.asarray(a, float) - np.asarray(b, float)
+    if len(d) == 0:
+        return {"diff": math.nan, "lo": math.nan, "hi": math.nan, "p": math.nan, "n": 0}
+    rng = np.random.default_rng(seed)
+    boots = d[rng.integers(0, len(d), size=(n, len(d)))].mean(axis=1)
+    p = 2 * min((boots <= 0).mean(), (boots >= 0).mean())
+    return {"diff": float(d.mean()), "lo": float(np.percentile(boots, 2.5)),
+            "hi": float(np.percentile(boots, 97.5)), "p": float(min(1.0, p)), "n": int(len(d))}
 
 
-class MetricsCalculator:
+# ---- Survival ---------------------------------------------------------------------
+
+def kaplan_meier(durations: Sequence[float], observed: Sequence[bool]) -> tuple[np.ndarray, np.ndarray]:
+    """Survival curve S(t) as step points (times, survival). observed=False means censored."""
+    t = np.asarray(durations, float)
+    e = np.asarray(observed, bool)
+    times = np.unique(t[e])
+    surv, s = [], 1.0
+    for ti in times:
+        at_risk = (t >= ti).sum()
+        deaths = ((t == ti) & e).sum()
+        s *= 1.0 - deaths / at_risk
+        surv.append(s)
+    return np.concatenate([[0.0], times]), np.concatenate([[1.0], surv])
+
+
+def km_median(durations: Sequence[float], observed: Sequence[bool]) -> float:
+    times, surv = kaplan_meier(durations, observed)
+    below = np.where(surv <= 0.5)[0]
+    return float(times[below[0]]) if len(below) else math.inf
+
+
+def km_median_ci(durations, observed, n: int = 1000, seed: int = 0) -> tuple[float, float, float]:
+    d, e = np.asarray(durations, float), np.asarray(observed, bool)
+    if len(d) == 0:
+        return (math.nan, math.nan, math.nan)
+    rng = np.random.default_rng(seed)
+    boots = []
+    for _ in range(n):
+        i = rng.integers(0, len(d), len(d))
+        boots.append(km_median(d[i], e[i]))
+    boots = np.sort(np.array(boots))   # inf sorts last; index percentiles to keep it
+    lo, hi = boots[int(0.025 * (n - 1))], boots[int(0.975 * (n - 1))]
+    return km_median(d, e), float(lo), float(hi)
+
+
+def leak_lifetime(probe_times: Sequence[float], leaked: Sequence[bool]) -> tuple[float, bool]:
+    """Lifetime of one revocation event from its probe series.
+
+    Returns (duration, observed). Duration is the first probe time after the last leak
+    (an upper bound on when leakage ended); 0 if nothing leaked. If the last probe still
+    leaked, the event is censored at that time.
     """
-    Computes formalized metrics (§4) from probe logs and ground truth.
-    """
+    pairs = sorted(zip(probe_times, leaked))
+    last = max((i for i, (_, lk) in enumerate(pairs) if lk), default=None)
+    if last is None:
+        return 0.0, True
+    if last == len(pairs) - 1:
+        return float(pairs[-1][0]), False
+    return float(pairs[last + 1][0]), True
 
-    def __init__(self, corpus_manager: Optional[CorpusManager] = None) -> None:
-        self.corpus_manager = corpus_manager
 
-    def compute_leakage_magnitude(
-        self,
-        log_rows: list[StructuredLogRow],
-        target_doc_id: str = "doc_A6",
-    ) -> tuple[dict[str, float], dict[str, int]]:
-        """
-        Computes Leakage Magnitude (LM = restricted_info_recovered / restricted_info_total)
-        and diagnostic probe counts (Fix 3).
-        """
-        if not log_rows:
-            return (
-                {"LM_total": 0.0, "LM_cache": 0.0, "LM_memory": 0.0, "LM_facts": 0.0},
-                {"factual_probes": 0, "memory_probes": 0, "restricted_probes": 0},
-            )
+# ---- Existence inference ------------------------------------------------------------
 
-        # Look up sensitive facts for the target doc
-        facts = []
-        if self.corpus_manager:
-            facts = self.corpus_manager.get_sensitive_facts(target_doc_id)
-        if not facts:
-            facts = ["nextomazumab", "67.3%", "41.2%", "0.51", "3.2B", "18,400"]
+def tpr_at_fpr(labels: np.ndarray, scores: np.ndarray, fpr_target: float = 0.01) -> float:
+    from sklearn.metrics import roc_curve
+    fpr, tpr, _ = roc_curve(labels, scores)
+    ok = fpr <= fpr_target
+    return float(tpr[ok].max()) if ok.any() else 0.0
 
-        total_facts = len(facts)
-        recovered_facts = set()
 
-        cache_hits_on_restricted = 0
-        memory_leaks = 0
-        restricted_probes = 0
-        memory_probes_count = 0
-        factual_probes_count = 0
+def eia_metrics(labels: np.ndarray, scores: np.ndarray, threshold: float = 0.5) -> dict:
+    from sklearn.metrics import balanced_accuracy_score, roc_auc_score
+    labels = np.asarray(labels)
+    if len(set(labels)) < 2:
+        return {"auc": math.nan, "tpr_at_1fpr": math.nan, "balanced_acc": math.nan}
+    return {
+        "auc": float(roc_auc_score(labels, scores)),
+        "tpr_at_1fpr": tpr_at_fpr(labels, scores, 0.01),
+        "balanced_acc": float(balanced_accuracy_score(labels, scores >= threshold)),
+    }
 
-        for r in log_rows:
-            # Skip initial authorized warm-up
-            if r.step_label == "warmup_alice":
-                continue
 
-            try:
-                retrieved_doc_ids = json.loads(r.retrieved_doc_ids)
-            except json.JSONDecodeError:
-                retrieved_doc_ids = []
-            try:
-                accessible_doc_ids = json.loads(r.accessible_doc_ids)
-            except json.JSONDecodeError:
-                accessible_doc_ids = []
+def fast_auc(labels: np.ndarray, scores: np.ndarray) -> float:
+    """Mann-Whitney AUC with average ranks for ties (equals sklearn's roc_auc_score)."""
+    from scipy.stats import rankdata
+    labels = np.asarray(labels).astype(bool)
+    n_pos, n_neg = labels.sum(), (~labels).sum()
+    if n_pos == 0 or n_neg == 0:
+        return math.nan
+    ranks = rankdata(scores)
+    return float((ranks[labels].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
 
-            is_restricted_target = (
-                r.ground_truth_restricted
-                or target_doc_id in retrieved_doc_ids
-                or target_doc_id in accessible_doc_ids
-                or any(term in r.query.lower() for term in ["nightingale", "trial", "mrd-441", "patricia", "falcon", "privata", "compensation", "audit"])
-            )
 
-            if not is_restricted_target:
-                continue
+def auc_ci(labels, scores, n: int = 1000, seed: int = 0) -> tuple[float, float, float]:
+    labels, scores = np.asarray(labels), np.asarray(scores)
+    if len(set(labels)) < 2:
+        return (math.nan, math.nan, math.nan)
+    rng = np.random.default_rng(seed)
+    boots = [fast_auc(labels[i], scores[i]) for i in rng.integers(0, len(labels), size=(n, len(labels)))]
+    boots = np.array([b for b in boots if not math.isnan(b)])
+    return fast_auc(labels, scores), float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
 
-            is_scoreable_response = bool(r.response_text.strip())
-            if not is_scoreable_response:
-                continue
 
-            restricted_probes += 1
+# ---- Utility ---------------------------------------------------------------------------
 
-            if "same" in r.step_label or "memory" in r.step_label:
-                memory_probes_count += 1
-            if r.step_label.startswith("probe_") or "new" in r.step_label or "same" in r.step_label:
-                factual_probes_count += 1
+def recall_at_k(ranked: Sequence[str], relevant: str, k: int) -> float:
+    return float(relevant in list(ranked)[:k])
 
-            # Determine if response is a refusal
-            resp_lower = r.response_text.lower()
-            is_refusal = (
-                r.refusal_flag
-                or "don't have" in resp_lower
-                or "no relevant" in resp_lower
-                or "information available" in resp_lower
-                or "cannot provide" in resp_lower
-            )
 
-            # Check for factual leakage
-            has_sensitive_fact = False
-            for fact in facts:
-                if fact.lower() in resp_lower:
-                    has_sensitive_fact = True
-                    if not is_refusal:
-                        recovered_facts.add(fact)
+def ndcg_at_k(ranked: Sequence[str], relevant: str, k: int) -> float:
+    """Single relevant document: nDCG = 1/log2(rank+1) at its first position."""
+    for i, d in enumerate(list(ranked)[:k]):
+        if d == relevant:
+            return 1.0 / math.log2(i + 2)
+    return 0.0
 
-            # Surface-specific attribution
-            if r.cache_hit and not is_refusal and has_sensitive_fact:
-                cache_hits_on_restricted += 1
 
-            if not r.cache_hit and not is_refusal and has_sensitive_fact:
-                if "same" in r.step_label or "memory-assisted" in resp_lower:
-                    memory_leaks += 1
+def percentile(values: Sequence[float], q: float) -> float:
+    return float(np.percentile(np.asarray(values, float), q)) if len(values) else math.nan
 
-        fact_lm = len(recovered_facts) / max(1, total_facts)
-        cache_lm = cache_hits_on_restricted / max(1, restricted_probes)
-        memory_lm = memory_leaks / max(1, memory_probes_count)
 
-        total_lm = max(fact_lm, cache_lm, memory_lm)
+def fmt_ci(point: float, lo: float, hi: float, digits: int = 3) -> str:
+    def f(x: float) -> str:
+        return "inf" if math.isinf(x) else ("n/a" if math.isnan(x) else f"{x:.{digits}f}")
+    if math.isnan(point):
+        return "n/a"
+    return f"{f(point)} [{f(lo)}, {f(hi)}]"
 
-        lm_results = {
-            "LM_total": round(total_lm, 4),
-            "LM_cache": round(cache_lm, 4),
-            "LM_memory": round(memory_lm, 4),
-            "LM_facts": round(fact_lm, 4),
-        }
-        counts = {
-            "factual_probes": factual_probes_count,
-            "memory_probes": memory_probes_count,
-            "restricted_probes": restricted_probes,
-        }
-        return lm_results, counts
 
-    def compute_leakage_half_life(
-        self,
-        decay_points: list[tuple[int, float]],
-    ) -> float:
-        """
-        Calculates Leakage Half-Life (LH = query count or time where LM(t) = 0.5 * LM(0+)).
-        """
-        if not decay_points:
-            return 0.0
-
-        sorted_points = sorted(decay_points, key=lambda x: x[0])
-        initial_lm = sorted_points[0][1]
-
-        if initial_lm <= 0.001:
-            # Immediate elimination on revocation -> LH is 0.0
-            return 0.0
-
-        target_lm = 0.5 * initial_lm
-
-        for i in range(len(sorted_points) - 1):
-            t1, lm1 = sorted_points[i]
-            t2, lm2 = sorted_points[i + 1]
-
-            if lm1 >= target_lm and lm2 <= target_lm:
-                if lm1 == lm2:
-                    return float(t1)
-                frac = (lm1 - target_lm) / (lm1 - lm2)
-                return float(round(t1 + frac * (t2 - t1), 2))
-
-        last_t, last_lm = sorted_points[-1]
-        if last_lm > target_lm:
-            return float(math.inf)
-        return float(last_t)
-
-    def compute_existence_inference_accuracy(
-        self,
-        inferences: list[AttackerInference],
-        probe_definitions: list[ProbeDefinition],
-    ) -> dict[str, float]:
-        """
-        Computes Existence Inference Accuracy (EIA), Precision, Recall, and F1.
-        """
-        if not inferences or not probe_definitions:
-            return {"EIA": 0.0, "precision": 0.0, "recall": 0.0, "f1": 0.0}
-
-        truth_map = {p.query_text: p.is_true_positive for p in probe_definitions}
-
-        tp = 0
-        fp = 0
-        tn = 0
-        fn = 0
-
-        for inf in inferences:
-            gt = truth_map.get(inf.query_text, False)
-            pred = inf.inferred_exists
-
-            if pred and gt:
-                tp += 1
-            elif pred and not gt:
-                fp += 1
-            elif not pred and not gt:
-                tn += 1
-            elif not pred and gt:
-                fn += 1
-
-        total = tp + fp + tn + fn
-        accuracy = (tp + tn) / max(1, total)
-        precision = tp / max(1, (tp + fp))
-        recall = tp / max(1, (tp + fn))
-        f1 = (2 * precision * recall) / max(1e-9, (precision + recall))
-
-        return {
-            "EIA": round(accuracy, 4),
-            "precision": round(precision, 4),
-            "recall": round(recall, 4),
-            "f1": round(f1, 4),
-        }
-
-    def compute_latency_percentiles(self, log_rows: list[StructuredLogRow]) -> tuple[float, float]:
-        """Compute p50 and p95 latency."""
-        if not log_rows:
-            return 0.0, 0.0
-        latencies = sorted(r.normalized_latency_ms if r.mode == "mitigated" else r.latency_ms for r in log_rows)
-        n = len(latencies)
-        p50 = latencies[int(0.50 * (n - 1))]
-        p95 = latencies[int(0.95 * (n - 1))]
-        return round(p50, 2), round(p95, 2)
-
-    def evaluate_run(
-        self,
-        mode: str,
-        log_rows: list[StructuredLogRow],
-        inferences: list[AttackerInference],
-        probe_definitions: list[ProbeDefinition],
-        decay_points: Optional[list[tuple[int, float]]] = None,
-        target_doc_id: str = "doc_A6",
-    ) -> SecurityMetricsReport:
-        """
-        Aggregate all metrics into a comprehensive SecurityMetricsReport with diagnostic verification (Fix 3).
-        """
-        lm_dict, probe_counts = self.compute_leakage_magnitude(log_rows, target_doc_id)
-        eia_dict = self.compute_existence_inference_accuracy(inferences, probe_definitions)
-        p50, p95 = self.compute_latency_percentiles(log_rows)
-
-        lh = self.compute_leakage_half_life(decay_points or [(0, lm_dict["LM_total"])])
-
-        raw_score_leaks = sum(
-            1 for r in log_rows
-            if r.ground_truth_restricted and r.raw_similarity_score > 0.40 and not r.cache_hit
-        )
-
-        print(f"[{mode.upper()} Diagnostics] Probes exercised: {probe_counts['restricted_probes']} restricted target probes, "
-              f"{probe_counts['factual_probes']} factual probes, {probe_counts['memory_probes']} memory-surface probes.")
-
-        return SecurityMetricsReport(
-            mode=mode,
-            total_probes=len(log_rows),
-            leakage_magnitude_total=lm_dict["LM_total"],
-            leakage_magnitude_cache=lm_dict["LM_cache"],
-            leakage_magnitude_memory=lm_dict["LM_memory"],
-            leakage_magnitude_facts=lm_dict["LM_facts"],
-            leakage_half_life_queries=lh,
-            existence_inference_accuracy=eia_dict["EIA"],
-            eia_precision=eia_dict["precision"],
-            eia_recall=eia_dict["recall"],
-            eia_f1=eia_dict["f1"],
-            p50_latency_ms=p50,
-            p95_latency_ms=p95,
-            raw_score_leak_count=raw_score_leaks,
-            factual_probes_count=probe_counts["factual_probes"],
-            memory_probes_count=probe_counts["memory_probes"],
-            restricted_target_probes_count=probe_counts["restricted_probes"],
-        )
+def safe_mean(values: Sequence[float]) -> Optional[float]:
+    return float(np.mean(values)) if len(values) else None

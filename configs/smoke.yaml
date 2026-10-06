@@ -1,0 +1,13 @@
+# Fast offline sanity run: hash embedder, overlap reranker, stub LLM. ~1 minute.
+name: smoke
+experiment: revocation
+seeds: 1
+base:
+  embedder: hash
+  reranker: overlap
+  llm_backend: stub
+  min_relevance: 0.15
+  events: 8
+  sync: periodic:3600
+grid:
+  preset: [baseline, full]

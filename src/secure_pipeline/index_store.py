@@ -1,176 +1,245 @@
 """
-index_store.py -- Vector Index Store with Per-Tenant Partitioning and ACL Pre-Filtering.
+index_store.py -- ChromaDB chunk index with materialized ACLs and an ACL sync policy (threat T1).
 
-Design (§3.3, §3.6):
-- Baseline mode: Flat index retrieval across all tenants and documents. RBAC is
-  applied post-retrieval, leaking raw similarity scores (T4).
-- Mitigated mode: Pre-retrieval tenant isolation and ACL partition filtering.
-  Only vectors belonging to the user's tenant and authorized documents are scored,
-  preventing cross-tenant vector contamination and side-channel leakage.
-- Invalidation Hook: on ACCESS_REVOKED, can immediately re-tag or isolate vector records.
+At ingestion every chunk stores its tenant and one boolean metadata key per user
+(acl__<user_id>) saying whether that user may read the chunk's document. This is the
+pattern production SharePoint/M365 RAG pipelines use: permissions are copied into the
+index so retrieval can filter with a `where` clause.
+
+The copy goes stale. The live IAM (AccessControlManager) changes instantly on
+revocation; the index metadata changes only when the SyncPolicy runs:
+
+- live              : every ACCESS_REVOKED event is applied immediately
+- periodic:<s>      : full re-crawl of all ACLs every <s> seconds (no events)
+- event:<p>[:<s>]   : events applied immediately, but each is lost with probability <p>
+                      (lost webhooks); optional full re-crawl backstop every <s> seconds
+
+Retrieval:
+- prefilter=True  : Chroma `where` on tenant + acl__<user> (stale ACL is what filters)
+- prefilter=False : flat top-k over every tenant; caller post-filters on `index_allows`
 """
 
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING
+import random
+import uuid
+from dataclasses import dataclass
+from typing import Optional
+
 import numpy as np
 
-if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer
-    from .access_control import RevocationEvent
+from .access_control import AccessControlManager, RevocationEvent
+from .clock import Clock
+from .corpus import Chunk
 
 
-class SecureVectorIndex:
-    """
-    Vector Index supporting both Baseline (Flat) and Mitigated (Tenant/ACL Pre-Filtered) modes.
+@dataclass(frozen=True)
+class SyncPolicy:
+    kind: str = "live"                 # "live" | "periodic" | "event"
+    interval_s: float = 0.0            # periodic interval
+    drop_rate: float = 0.0             # event: probability an event is lost
+    backstop_s: Optional[float] = None # event: periodic full crawl backstop
 
-    Parameters
-    ----------
-    chroma_dir : str
-        Path to ChromaDB persistence directory or in-memory tag.
-    embedder : SentenceTransformer
-        Shared embedding model instance.
-    collection_name : str
-        Collection identifier.
-    mode : str
-        "baseline" or "mitigated".
-    """
+    @classmethod
+    def parse(cls, spec: str) -> "SyncPolicy":
+        parts = spec.split(":")
+        if parts[0] == "live":
+            return cls("live")
+        if parts[0] == "periodic":
+            return cls("periodic", interval_s=float(parts[1]))
+        if parts[0] == "event":
+            drop = float(parts[1]) if len(parts) > 1 else 0.0
+            backstop = float(parts[2]) if len(parts) > 2 else None
+            return cls("event", drop_rate=drop, backstop_s=backstop)
+        raise ValueError(f"bad sync policy {spec!r}")
 
+    def label(self) -> str:
+        if self.kind == "periodic":
+            return f"periodic:{self.interval_s:g}"
+        if self.kind == "event":
+            return f"event:{self.drop_rate:g}" + (f":{self.backstop_s:g}" if self.backstop_s else "")
+        return "live"
+
+
+@dataclass(frozen=True)
+class Candidate:
+    chunk_id: str
+    doc_id: str
+    tenant_id: str
+    title: str
+    text: str
+    score: float           # cosine similarity in [0, 1]
+    index_allows: bool     # what the (possibly stale) index ACL says for this user
+
+
+def acl_key(user_id: str) -> str:
+    return f"acl__{user_id}"
+
+
+_CLIENT = None
+
+
+def _client():
+    global _CLIENT
+    if _CLIENT is None:
+        import chromadb
+        _CLIENT = chromadb.EphemeralClient()
+    return _CLIENT
+
+
+class VectorIndex:
     def __init__(
         self,
-        chroma_dir: str,
-        embedder: SentenceTransformer,
-        collection_name: str = "full_rag_index",
-        mode: str = "baseline",
+        chunks: list[Chunk],
+        embeddings: np.ndarray,
+        acm: AccessControlManager,
+        policy: SyncPolicy,
+        clock: Clock,
+        rng: random.Random,
     ) -> None:
-        self._embedder = embedder
-        self._mode = mode
-        self._collection_name = collection_name
-        self._docs_store: dict[str, dict] = {}  # doc_id -> {text, tenant_id, restricted, ...}
-        self._embeddings_store: dict[str, np.ndarray] = {}  # doc_id -> normalized embedding vector
+        self.acm = acm
+        self.policy = policy
+        self.clock = clock
+        self.rng = rng
+        self.users = acm.users()
+        self._chunks = {c.chunk_id: c for c in chunks}
+        self._emb = {c.chunk_id: e for c, e in zip(chunks, embeddings)}
+        self._doc_chunks: dict[str, list[str]] = {}
+        for c in chunks:
+            self._doc_chunks.setdefault(c.doc_id, []).append(c.chunk_id)
+        self._removed: set[str] = set()
+        self.dropped_events = 0
+        self.applied_events = 0
 
-        # Attempt to initialize ChromaDB if available; fallback to lightweight in-memory vector store
-        try:
-            import chromadb
-            self._client = chromadb.PersistentClient(path=chroma_dir)
-            self._collection = self._client.get_or_create_collection(
-                name=collection_name,
-                metadata={"hnsw:space": "cosine"},
-            )
-            self._use_chroma = True
-        except Exception as exc:
-            self._client = None
-            self._collection = None
-            self._use_chroma = False
+        self._col = _client().create_collection(
+            name=f"afterimage-{uuid.uuid4().hex[:12]}",
+            metadata={"hnsw:space": "cosine"},
+        )
+        # Materialized ACL: doc_id -> users the index believes may read it.
+        self._materialized: dict[str, frozenset[str]] = {
+            d: frozenset(acm.users_with_access(d)) for d in self._doc_chunks
+        }
+        self._add_chunks(list(self._chunks))
+        interval = policy.interval_s if policy.kind == "periodic" else policy.backstop_s
+        self._last_full_sync = clock.now() - (rng.uniform(0, interval) if interval else 0.0)
+
+        if policy.kind in ("live", "event"):
+            acm.subscribe(self.on_event)
 
     # ---- Ingestion ----------------------------------------------------------
 
-    def add_documents(self, docs: list[dict]) -> None:
-        """Embed and upsert documents with rich tenant and ACL metadata."""
-        if not docs:
-            return
+    def _meta(self, chunk: Chunk) -> dict:
+        allowed = self._materialized[chunk.doc_id]
+        meta = {"doc_id": chunk.doc_id, "tenant_id": chunk.tenant_id}
+        meta.update({acl_key(u): (u in allowed) for u in self.users})
+        return meta
 
-        texts = [d["text"] for d in docs]
-        embeddings = self._embedder.encode(
-            texts, normalize_embeddings=True, show_progress_bar=False
-        )
-
-        for d, emb in zip(docs, embeddings):
-            doc_id = d["doc_id"]
-            self._docs_store[doc_id] = dict(d)
-            self._embeddings_store[doc_id] = np.array(emb, dtype=np.float32)
-
-        if self._use_chroma and self._collection is not None:
-            emb_list = embeddings.tolist() if hasattr(embeddings, "tolist") else [list(e) for e in embeddings]
-            self._collection.upsert(
-                ids=[d["doc_id"] for d in docs],
-                embeddings=emb_list,
-                documents=texts,
-                metadatas=[
-                    {
-                        "tenant_id": str(d.get("tenant_id", "")),
-                        "restricted": str(d.get("restricted", False)),
-                        "title": str(d.get("title", "")),
-                        "sensitivity": str(d.get("sensitivity", "public")),
-                    }
-                    for d in docs
-                ],
+    def _add_chunks(self, chunk_ids: list[str]) -> None:
+        for i in range(0, len(chunk_ids), 1000):
+            batch = chunk_ids[i:i + 1000]
+            self._col.add(
+                ids=batch,
+                embeddings=[self._emb[c].tolist() for c in batch],
+                metadatas=[self._meta(self._chunks[c]) for c in batch],
             )
 
-    # ---- Querying -----------------------------------------------------------
+    def close(self) -> None:
+        _client().delete_collection(self._col.name)
 
-    def query(
-        self,
-        query_embedding: np.ndarray,
-        top_k: int = 5,
-        user_tenant: Optional[str] = None,
-        accessible_doc_ids: Optional[set[str]] = None,
-        mode_override: Optional[str] = None,
-    ) -> list[tuple[str, float, str]]:
-        """
-        Query vector index.
+    def rebind(self, acm: AccessControlManager) -> None:
+        """Point the index at a fresh IAM (new trial): resync every ACL, restore removed docs,
+        and start the crawl cycle at a random phase so revocations land uniformly within it."""
+        self.acm = acm
+        self.restore_docs(list(self._removed))
+        self._sync_docs(list(self._doc_chunks))
+        interval = self.policy.interval_s if self.policy.kind == "periodic" else self.policy.backstop_s
+        self._last_full_sync = self.clock.now() - (self.rng.uniform(0, interval) if interval else 0.0)
+        self.dropped_events = self.applied_events = 0
+        if self.policy.kind in ("live", "event"):
+            acm.subscribe(self.on_event)
 
-        In Baseline mode: Searches across ALL documents globally.
-        In Mitigated mode: Pre-filters search space to ONLY the user's tenant and accessible docs.
+    # ---- Twin worlds --------------------------------------------------------
 
-        Returns
-        -------
-        list of (doc_id, cosine_similarity, text)
-        """
-        active_mode = mode_override or self._mode
+    def remove_docs(self, doc_ids) -> None:
+        ids = [c for d in doc_ids for c in self._doc_chunks[d] if d not in self._removed]
+        if ids:
+            self._col.delete(ids=ids)
+        self._removed |= set(doc_ids)
 
-        # Normalize query embedding
-        q_vec = np.array(query_embedding, dtype=np.float32)
-        norm = np.linalg.norm(q_vec)
-        if norm > 0:
-            q_vec = q_vec / norm
+    def restore_docs(self, doc_ids) -> None:
+        back = [d for d in doc_ids if d in self._removed]
+        self._removed -= set(back)
+        self._add_chunks([c for d in back for c in self._doc_chunks[d]])
 
-        candidate_ids = list(self._docs_store.keys())
+    # ---- ACL propagation ----------------------------------------------------
 
-        # MITIGATED MODE: Pre-retrieval isolation
-        if active_mode == "mitigated":
-            if user_tenant is not None:
-                candidate_ids = [
-                    d_id for d_id in candidate_ids
-                    if self._docs_store[d_id].get("tenant_id") == user_tenant
-                ]
-            if accessible_doc_ids is not None:
-                candidate_ids = [
-                    d_id for d_id in candidate_ids
-                    if d_id in accessible_doc_ids
-                ]
+    def _sync_docs(self, doc_ids) -> None:
+        changed = []
+        for d in doc_ids:
+            if d not in self._doc_chunks:
+                continue
+            live = frozenset(self.acm.users_with_access(d))
+            if live != self._materialized[d]:
+                self._materialized[d] = live
+                changed.append(d)
+        ids = [c for d in changed if d not in self._removed for c in self._doc_chunks[d]]
+        if ids:
+            self._col.update(ids=ids, metadatas=[self._meta(self._chunks[c]) for c in ids])
 
-        if not candidate_ids:
-            return []
+    def sync_all(self) -> None:
+        self._sync_docs(list(self._doc_chunks))
+        self._last_full_sync = self.clock.now()
 
-        # Compute cosine similarities for authorized candidates
-        scored: list[tuple[str, float, str]] = []
-        for d_id in candidate_ids:
-            d_vec = self._embeddings_store.get(d_id)
-            if d_vec is not None:
-                sim = float(np.dot(q_vec, d_vec))
-                # Bound similarity to [0.0, 1.0]
-                sim = max(0.0, min(1.0, sim))
-                text = self._docs_store[d_id]["text"]
-                scored.append((d_id, sim, text))
+    def on_event(self, event: RevocationEvent) -> None:
+        if self.policy.kind == "event" and self.rng.random() < self.policy.drop_rate:
+            self.dropped_events += 1
+            return
+        self.applied_events += 1
+        self._sync_docs(event.doc_ids)
 
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return scored[:top_k]
+    def tick(self) -> None:
+        """Run any periodic crawl that is due. Called before every query."""
+        interval = self.policy.interval_s if self.policy.kind == "periodic" else self.policy.backstop_s
+        if not interval:
+            return
+        now = self.clock.now()
+        if now - self._last_full_sync >= interval:
+            self.sync_all()
+            # Stay on the crawl grid rather than drifting with query arrival times.
+            self._last_full_sync = now - ((now - self._last_full_sync) % interval)
 
-    # ---- Invalidation Hook (§3.6) -------------------------------------------
+    def next_sync_in(self) -> Optional[float]:
+        interval = self.policy.interval_s if self.policy.kind == "periodic" else self.policy.backstop_s
+        if not interval:
+            return None
+        return interval - (self.clock.now() - self._last_full_sync)
 
-    def on_revocation(self, event: RevocationEvent) -> None:
-        """
-        Invalidation callback triggered when ACCESS_REVOKED is fired.
-        Ensures internal metadata tags or isolated partitions are refreshed.
-        """
-        # In this memory/Chroma design, pre-filtering uses live accessible_doc_ids.
-        # This hook logs the partition invalidation for instrumentation.
-        pass
+    def is_stale(self, doc_id: str) -> bool:
+        return self._materialized[doc_id] != frozenset(self.acm.users_with_access(doc_id))
 
-    def count(self) -> int:
-        return len(self._docs_store)
+    def index_allows(self, user_id: str, doc_id: str) -> bool:
+        return user_id in self._materialized[doc_id]
 
+    # ---- Retrieval ----------------------------------------------------------
 
-# Backward-compatible alias
-VectorIndex = SecureVectorIndex
+    def query(self, q_emb: np.ndarray, top_k: int, user_id: str, tenant_id: Optional[str],
+              prefilter: bool) -> list[Candidate]:
+        self.tick()
+        where = None
+        if prefilter:
+            where = {"$and": [{"tenant_id": tenant_id}, {acl_key(user_id): True}]}
+        res = self._col.query(
+            query_embeddings=[np.asarray(q_emb, dtype=np.float32).tolist()],
+            n_results=top_k,
+            where=where,
+            include=["distances", "metadatas"],
+        )
+        out = []
+        for cid, dist, meta in zip(res["ids"][0], res["distances"][0], res["metadatas"][0]):
+            c = self._chunks[cid]
+            out.append(Candidate(
+                chunk_id=cid, doc_id=c.doc_id, tenant_id=c.tenant_id, title=c.title, text=c.text,
+                score=float(min(1.0, max(0.0, 1.0 - dist))),
+                index_allows=bool(meta.get(acl_key(user_id), False)),
+            ))
+        return out

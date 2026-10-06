@@ -1,16 +1,27 @@
 [project]
-name = "ragleakage"
-version = "0.1.0"
-description = "Add your description here"
+name = "afterimage"
+version = "0.2.0"
+description = "Afterimage: measuring post-revocation and metadata leakage in multi-tenant RAG"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "chromadb>=1.5.9",
     "google-genai>=1.0.0",
     "groq>=1.7.0",
+    "matplotlib>=3.9",
+    "numpy>=2.0",
     "openai>=3.8.0",
     "pandas>=3.0.5",
     "python-dotenv>=1.2.3",
     "pyyaml>=6.0.3",
+    "scikit-learn>=1.5",
+    "scipy>=1.13",
     "sentence-transformers>=6.0.0",
 ]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

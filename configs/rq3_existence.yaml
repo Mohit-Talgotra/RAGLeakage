@@ -1,0 +1,16 @@
+# RQ3: can an outsider or insider tell a restricted document exists, and from which signal?
+# Twin worlds (doc present / absent); analysis projects every run onto the three exposure
+# profiles and trains the attacker on shadow tenants t1-t3, testing on t4-t5.
+name: rq3_existence
+experiment: existence
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  exposure: with_reranker
+  attackers: [insider, outsider]
+  victim_warmup: 0.5
+  sync: live
+grid:
+  preset: [strawman, baseline, legacy, full]
