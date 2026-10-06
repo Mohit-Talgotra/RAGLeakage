@@ -1,231 +1,95 @@
 """
-semantic_cache.py -- Secure Semantic Cache with Invalidation & Multi-Tenant Isolation.
+semantic_cache.py -- Embedding-keyed answer cache (threat T2).
 
-Design (§3.4, §3.6, §5.1):
-- Embedding-keyed query-response cache with configurable TTL.
-- Baseline mode: Naive cache. Lookups happen before RBAC checks. No tenant boundary.
-  No invalidation on revocation (primary temporal leakage surface, Threat T2).
-- Mitigated mode:
-  1. ACL-Aware Cache Lookup: Validates that the current user currently possesses
-     active permissions to ALL doc_ids that produced the cached response within
-     the requesting tenant.
-  2. Invalidation Hook: Listens for ACCESS_REVOKED events and immediately purges
-     any cache entry that references revoked document IDs or belongs to revoked users.
+Behaviour is set by Mitigations:
+- cache_scope  : "global" (any user hits any entry), "tenant", or "user"
+- cache_evict  : eager; on ACCESS_REVOKED evict every entry whose taint intersects the
+                 revoked docs (conservative: other holders lose the entry too)
+- lazy_check   : on every lookup, skip entries whose taint the requester does not fully hold
+                 in the live IAM (covers lost events and lagging sync)
+
+Entries expire after ttl_s on the shared Clock.
 """
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import Optional
+
 import numpy as np
 
-if TYPE_CHECKING:
-    from .access_control import RevocationEvent, AccessControlManager
+from .access_control import AccessControlManager, RevocationEvent
+from .clock import Clock
+from .provenance import Taint
 
 
 @dataclass
 class CacheEntry:
-    """A cached query-response record with full security provenance."""
-    embedding: np.ndarray          # normalised query embedding
-    response: str                  # LLM generated response text
-    doc_ids: list[str]             # doc_ids that contributed to this response
-    tenant_id: Optional[str] = None
-    created_by: Optional[str] = None
-    timestamp: float = field(default_factory=time.time)
-    ttl_seconds: float = 3600.0
+    embedding: np.ndarray
+    query: str
+    response: str
+    sources: list[tuple[str, float]]   # (title, score) shown with the original answer
+    confidence: float
+    rerank_confidence: float
+    taint: Taint
+    source_docs: tuple[str, ...]       # ground truth: docs the answer was generated from
+    tenant_id: Optional[str]
+    created_by: str
+    created_at: float
 
-    def is_expired(self, current_time: Optional[float] = None) -> bool:
-        now = current_time if current_time is not None else time.time()
-        return (now - self.timestamp) > self.ttl_seconds
 
-
-class SecureSemanticCache:
-    """
-    Semantic Cache supporting both Naive and Mitigated security modes.
-
-    Parameters
-    ----------
-    ttl_seconds : float
-        Time-to-live in seconds (e.g. 10=test, 60=short, 600=medium, 3600=long).
-    sim_threshold : float
-        Minimum cosine similarity for a cache hit (default: 0.70).
-    mode : str
-        "baseline" or "mitigated".
-    """
-
-    def __init__(
-        self,
-        ttl_seconds: float = 3600.0,
-        sim_threshold: float = 0.70,
-        mode: str = "baseline",
-    ) -> None:
+class SemanticCache:
+    def __init__(self, clock: Clock, acm: AccessControlManager, ttl_s: float, threshold: float,
+                 scope: str, evict_on_revoke: bool, lazy_check: bool) -> None:
+        self.clock = clock
+        self.acm = acm
+        self.ttl_s = ttl_s
+        self.threshold = threshold
+        self.scope = scope
+        self.lazy_check = lazy_check
         self._entries: list[CacheEntry] = []
-        self._ttl = ttl_seconds
-        self._threshold = sim_threshold
-        self._mode = mode
-        self.eviction_count = 0
-        self.revocation_audit: list[dict[str, object]] = []
+        self.evictions = 0
+        if evict_on_revoke:
+            acm.subscribe(self.on_revocation)
 
-    @property
-    def mode(self) -> str:
-        return self._mode
+    def _visible(self, e: CacheEntry, user_id: str, tenant_id: Optional[str], now: float) -> bool:
+        if now - e.created_at > self.ttl_s:
+            return False
+        if self.scope == "tenant" and e.tenant_id != tenant_id:
+            return False
+        if self.scope == "user" and e.created_by != user_id:
+            return False
+        if self.lazy_check and not self.acm.holds_all(user_id, e.taint):
+            return False
+        return True
 
-    @mode.setter
-    def mode(self, value: str) -> None:
-        self._mode = value
-
-    @property
-    def ttl_seconds(self) -> float:
-        return self._ttl
-
-    @ttl_seconds.setter
-    def ttl_seconds(self, value: float) -> None:
-        self._ttl = value
-
-    # ---- Querying -----------------------------------------------------------
-
-    def get(
-        self,
-        query_embedding: np.ndarray,
-        user_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
-        rbac: Optional[AccessControlManager] = None,
-        mode_override: Optional[str] = None,
-        current_time: Optional[float] = None,
-    ) -> Optional[tuple[CacheEntry, float]]:
-        """
-        Look up a query in the cache.
-
-        In Baseline mode: Returns any matching entry without verifying access rights.
-        In Mitigated mode: Verifies tenant isolation and that user_id has valid access
-        to all doc_ids in the cached entry.
-        """
-        active_mode = mode_override or self._mode
-        now = current_time if current_time is not None else time.time()
-
-        best_sim: float = -1.0
-        best_entry: Optional[CacheEntry] = None
-
-        for entry in self._entries:
-            # Check TTL expiry
-            if entry.is_expired(now):
+    def get(self, q_emb: np.ndarray, user_id: str, tenant_id: Optional[str]) -> Optional[tuple[CacheEntry, float]]:
+        now = self.clock.now()
+        best, best_sim = None, -1.0
+        for e in self._entries:
+            if not self._visible(e, user_id, tenant_id, now):
                 continue
-
-            # MITIGATED MODE: Enforce tenant isolation and live RBAC authorization
-            if active_mode == "mitigated":
-                # 1. Tenant boundary check
-                if tenant_id and entry.tenant_id and entry.tenant_id != tenant_id:
-                    continue
-
-                # 2. Live access check for all source documents
-                if user_id and rbac is not None:
-                    # If entry relied on specific docs, user must currently have access to every one
-                    if entry.doc_ids and any(not rbac.has_access(user_id, d_id) for d_id in entry.doc_ids):
-                        continue
-
-            sim = _cosine_sim(query_embedding, entry.embedding)
+            sim = float(np.dot(q_emb, e.embedding))
             if sim > best_sim:
-                best_sim = sim
-                best_entry = entry
-
-        if best_entry is not None and best_sim >= self._threshold:
-            return best_entry, best_sim
+                best, best_sim = e, sim
+        if best is not None and best_sim >= self.threshold:
+            return best, best_sim
         return None
 
-    # ---- Insertion ----------------------------------------------------------
-
-    def put(
-        self,
-        query_embedding: np.ndarray,
-        response: str,
-        doc_ids: list[str],
-        tenant_id: Optional[str] = None,
-        created_by: Optional[str] = None,
-        timestamp: Optional[float] = None,
-    ) -> None:
-        """Store a new query-response record."""
-        entry = CacheEntry(
-            embedding=np.array(query_embedding, dtype=np.float32),
-            response=response,
-            doc_ids=list(doc_ids),
-            tenant_id=tenant_id,
-            created_by=created_by,
-            timestamp=timestamp if timestamp is not None else time.time(),
-            ttl_seconds=self._ttl,
-        )
+    def put(self, entry: CacheEntry) -> None:
         self._entries.append(entry)
 
-    # ---- Invalidation Hook (§3.6, Fix 2) ------------------------------------
-
     def on_revocation(self, event: RevocationEvent) -> None:
-        """
-        Revocation listener called by AccessControlManager on ACCESS_REVOKED events.
-        Instantly purges affected cache entries by doc_id, user_id, or role.
-        """
-        revoked_docs = set(event.doc_ids)
-        surviving_entries: list[CacheEntry] = []
-        evicted = 0
-
-        for entry in self._entries:
-            should_evict = False
-
-            # User offboarding -> evict all entries generated by this user
-            if event.event_type == "user_offboard" and entry.created_by == event.user_id:
-                should_evict = True
-            # Single doc or role revocation -> evict if entry contains any revoked document
-            elif any(d in revoked_docs for d in entry.doc_ids):
-                should_evict = True
-
-            if should_evict:
-                evicted += 1
-            else:
-                surviving_entries.append(entry)
-
-        self._entries = surviving_entries
-        self.eviction_count += evicted
-        self.revocation_audit.append(
-            {
-                "event_name": "ACCESS_REVOKED",
-                "event_type": event.event_type,
-                "user_id": event.user_id,
-                "doc_ids": sorted(revoked_docs),
-                "evicted": evicted,
-                "remaining": len(self._entries),
-            }
-        )
-        print(
-            f"[SemanticCache] ACCESS_REVOKED/{event.event_type} handled: "
-            f"{evicted} entries evicted, {len(self._entries)} remaining."
-        )
-
-    def entries_for_doc(self, doc_id: str, current_time: Optional[float] = None) -> list[CacheEntry]:
-        """Return active cache entries whose provenance includes doc_id."""
-        return [
-            entry for entry in self.active_entries(current_time)
-            if doc_id in entry.doc_ids
-        ]
+        keep = [e for e in self._entries if not (e.taint & event.doc_ids)]
+        self.evictions += len(self._entries) - len(keep)
+        self._entries = keep
 
     def clear(self) -> None:
         self._entries.clear()
 
-    def size(self) -> int:
+    def entries_tainted_by(self, doc_id: str) -> list[CacheEntry]:
+        now = self.clock.now()
+        return [e for e in self._entries if doc_id in e.taint and now - e.created_at <= self.ttl_s]
+
+    def __len__(self) -> int:
         return len(self._entries)
-
-    def active_entries(self, current_time: Optional[float] = None) -> list[CacheEntry]:
-        now = current_time if current_time is not None else time.time()
-        return [e for e in self._entries if not e.is_expired(now)]
-
-
-# ---- Helpers ----------------------------------------------------------------
-
-def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
-    norm_a = np.linalg.norm(a)
-    norm_b = np.linalg.norm(b)
-    if norm_a == 0.0 or norm_b == 0.0:
-        return 0.0
-    return float(np.dot(a, b) / (norm_a * norm_b))
-
-
-# Backward-compatible alias
-SemanticCache = SecureSemanticCache

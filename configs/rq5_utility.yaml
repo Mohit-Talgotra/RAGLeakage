@@ -1,0 +1,12 @@
+# RQ5: what does security cost? Authorized queries only.
+# Pareto plot: python analyze.py results/rq5_utility --leakage results/rq1_surfaces
+name: rq5_utility
+experiment: utility
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  queries: 300
+grid:
+  preset: [strawman, baseline, legacy, full]

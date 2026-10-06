@@ -1,0 +1,16 @@
+# RQ2: how long does leakage last under real propagation policies?
+# Shipped baseline (no revocation hooks); ACL sync policy and cache TTL vary.
+# Analytic check: periodic sync every D with uniform revocation time -> mean index staleness D/2.
+name: rq2_revocation_window
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  preset: baseline
+  events: 40                    # x 5 seeds = 200 revocation events per cell
+  probe_times: [0, 60, 300, 900, 1800, 3600, 7200, 14400, 21600, 43200, 64800, 86400, 129600, 172800]
+grid:
+  sync: [periodic:3600, periodic:86400, event:0.0, event:0.05:86400]
+  cache_ttl_s: [600, 3600, 86400]

@@ -1,430 +1,283 @@
 """
-pipeline.py -- Multi-Tenant RAG Pipeline supporting Baseline and Mitigated Modes (§1, §3, §3.6, Fix 2, Fix 5).
+pipeline.py -- Multi-tenant RAG server, black-box client, and the Observation boundary.
 
-Architectural Modes:
-1. Baseline Mode:
-   - Cache checked before RBAC without tenant boundary.
-   - Flat global vector index retrieval with post-retrieval RBAC filtering.
-   - Unfiltered cross-encoder reranking exposing raw confidence.
-   - Stale conversational memory injected without revocation purging.
-   - Raw similarity, reranker scores, latency, and distinct refusal texts exposed.
+Server (RAGPipeline.handle) returns two things:
+- ApiResponse : what the HTTP API would send back
+- Truth       : ground truth for the experimenter (retrieved docs, cache provenance,
+                staleness, timings). The attacker never sees it.
 
-2. Mitigated Mode:
-   - Invalidation listener automatically bound to AccessControlManager on revocation.
-   - Tenant-isolated and ACL pre-filtered vector retrieval.
-   - Cross-encoder reranker applied strictly to authorized candidates.
-   - ACL-aware semantic cache with active invalidation eviction.
-   - Revocation-purged conversational session memory.
-   - Refusals and empty retrievals are never cached under empty doc sets.
-   - Fast, non-blocking standardized refusal path to optimize latency overhead (Fix 5).
-   - Metadata Normalization: score quantization, latency jitter, and standardized refusals.
+Client (Client.ask) is the only way experiments talk to the server. It measures
+latency with the shared Clock around the whole call and strips the ApiResponse down
+to the fields the chosen exposure profile shows:
+
+    text_only     : response text + latency
+    with_sources  : + source titles/scores and a retrieval confidence (common RAG UIs)
+    with_reranker : + reranker confidence
+
+Query flow (each step gated by Mitigations, see mitigations.py):
+    1. embed query
+    2. semantic cache lookup (scope, lazy taint check)
+    3. vector retrieval (ACL pre-filter on materialized index ACLs, or flat + post-filter)
+    4. live IAM re-check (optional), rerank
+    5. memory read (lazy taint check), LLM generation (or fast refusal)
+    6. taint the response, write cache + memory
+    7. quantize scores, pad latency to the configured shape
 """
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass
+import itertools
+import random
+from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from .access_control import AccessControlManager
-from .index_store import SecureVectorIndex
-from .reranker import CrossEncoderReranker
-from .semantic_cache import SecureSemanticCache
-from .session_memory import SecureSessionMemory
-from .normalization import MetadataNormalizer, NormalizedMetadata
-from .llm_client import LLMClient
-from .instrumentation import InstrumentationLogger, StructuredLogRow
+from .clock import Clock
+from .corpus import Corpus
+from .index_store import SyncPolicy, VectorIndex
+from .instrumentation import RunLogger
+from .llm_client import LLMClient, MemoryItem
+from .mitigations import Mitigations
+from .normalization import pad_seconds, quantize, refusal_text
+from .provenance import EMPTY, response_taint
+from .semantic_cache import CacheEntry, SemanticCache
+from .session_memory import SessionMemory
+
+EXPOSURE_PROFILES = ("text_only", "with_sources", "with_reranker")
+
+
+@dataclass(frozen=True)
+class Observation:
+    """Everything a black-box client can see. The attacker only ever gets this."""
+    text: str
+    latency_ms: float
+    sources: Optional[tuple[tuple[str, float], ...]] = None
+    confidence: Optional[float] = None
+    rerank_confidence: Optional[float] = None
 
 
 @dataclass
-class PipelineQueryResult:
-    """Standardized response from RAG Pipeline."""
-    response: str
-    retrieved_doc_ids: list[str]            # Ground truth candidate doc IDs
-    accessible_doc_ids: list[str]           # Authorized doc IDs
-    raw_similarity_score: float
-    normalized_similarity_score: float
-    similarity_band: str
-    raw_reranker_score: float
-    normalized_reranker_score: float
-    raw_latency_ms: float
-    effective_latency_ms: float
-    cache_hit: bool
-    refusal_flag: bool
-    refusal_type: Optional[str]
-    ground_truth_restricted: bool
-    log_row: Optional[StructuredLogRow] = None
-
-    # Backward compatibility properties
-    @property
-    def similarity_score(self) -> float:
-        return self.raw_similarity_score
-
-    @property
-    def latency_ms(self) -> float:
-        return self.effective_latency_ms
+class ApiResponse:
+    text: str
+    sources: list[tuple[str, float]]
+    confidence: float
+    rerank_confidence: float
 
 
-class SecureRAGPipeline:
-    """
-    Unified Multi-Tenant RAG Pipeline.
+@dataclass
+class Truth:
+    query_id: int
+    t: float
+    user: str
+    tenant: Optional[str]
+    session: str
+    query: str
+    t_since_revocation_s: Optional[float] = None   # since this user's last revocation
+    queries_since_revocation: Optional[int] = None # this user's queries since then (1 = first)
+    cache_hit: bool = False
+    cache_sim: float = 0.0
+    cache_creator: str = ""
+    cache_age_s: float = 0.0
+    candidate_docs: list[str] = field(default_factory=list)
+    candidate_scores: list[float] = field(default_factory=list)
+    gen_docs: list[str] = field(default_factory=list)             # docs passed to the LLM now
+    source_docs: list[str] = field(default_factory=list)          # docs the returned text came from
+    stale_docs_used: list[str] = field(default_factory=list)      # index allowed, IAM denies
+    live_denied_docs: list[str] = field(default_factory=list)     # caught by live_acl_check
+    memory_turns: int = 0
+    response_taint: list[str] = field(default_factory=list)
+    llm_called: bool = False
+    llm_cached: bool = False
+    llm_latency_ms: float = 0.0
+    model: str = ""
+    refused: bool = False
+    refusal_reason: str = ""
+    raw_confidence: float = 0.0
+    raw_rerank_confidence: float = 0.0
+    server_latency_ms: float = 0.0
+    pad_ms: float = 0.0
+    observed_latency_ms: float = 0.0
+    response: str = ""
 
-    Parameters
-    ----------
-    rbac : AccessControlManager
-    vector_index : SecureVectorIndex
-    cache : SecureSemanticCache
-    memory : SecureSessionMemory
-    llm : LLMClient
-    logger : InstrumentationLogger
-    embedder : SentenceTransformer
-    reranker : Optional[CrossEncoderReranker]
-    normalizer : Optional[MetadataNormalizer]
-    top_k : int
-    doc_metadata : Optional[dict]
-    mode : str
-        "baseline" or "mitigated".
-    """
 
-    def __init__(
-        self,
-        rbac: AccessControlManager,
-        vector_index: SecureVectorIndex,
-        cache: SecureSemanticCache,
-        memory: SecureSessionMemory,
-        llm: LLMClient,
-        logger: InstrumentationLogger,
-        embedder: SentenceTransformer,
-        reranker: Optional[CrossEncoderReranker] = None,
-        normalizer: Optional[MetadataNormalizer] = None,
-        top_k: int = 5,
-        doc_metadata: Optional[dict[str, dict]] = None,
-        mode: str = "baseline",
-    ) -> None:
-        self.rbac = rbac
-        self.vector_index = vector_index
-        self.cache = cache
-        self.memory = memory
-        self.llm = llm
-        self.logger = logger
+@dataclass(frozen=True)
+class PipelineConfig:
+    top_k: int = 5                  # chunks retrieved
+    gen_k: int = 3                  # chunks passed to the LLM
+    min_relevance: float = 0.25     # cosine floor; below it a chunk is "not found"
+    cache_ttl_s: float = 3600.0
+    cache_threshold: float = 0.90
+    summary_after: int = 8          # turns before rolling summary (0 = never)
+    keep_recent: int = 4
+    sync: str = "live"              # SyncPolicy spec, e.g. "periodic:3600", "event:0.05"
+
+
+class RAGPipeline:
+    def __init__(self, corpus: Corpus, chunk_embeddings: np.ndarray, embedder, reranker, llm: LLMClient,
+                 clock: Clock, mitigations: Mitigations, config: PipelineConfig, seed: int) -> None:
+        self.corpus = corpus
         self.embedder = embedder
-        self.reranker = reranker or CrossEncoderReranker()
-        self.normalizer = normalizer or MetadataNormalizer()
-        self.top_k = top_k
-        self.doc_metadata = doc_metadata or {}
-        self._mode = mode
+        self.reranker = reranker
+        self.llm = llm
+        self.clock = clock
+        self.m = mitigations
+        self.cfg = config
+        self.rng = random.Random(seed)
+        self._qid = itertools.count(1)
+        self._chunk_embeddings = chunk_embeddings
+        self.index: Optional[VectorIndex] = None
+        self.reset()
 
-        # Configure sub-components
-        self.set_mode(mode)
-        self._query_counter = 0
+    # ---- State --------------------------------------------------------------
 
-    @property
-    def mode(self) -> str:
-        return self._mode
+    def reset(self) -> None:
+        """Fresh IAM, cache and memory; index ACLs resynced to the fresh IAM.
 
-    def set_mode(self, mode: str) -> None:
-        """Switch operating mode between 'baseline' and 'mitigated'."""
-        self._mode = mode
-        self.rbac.mode = mode
-        self.cache.mode = mode
-        self.memory.mode = mode
-
-        # In mitigated mode, automatically register invalidation listeners
-        if mode == "mitigated":
-            self.rbac.register_listener(self.cache.on_revocation)
-            self.rbac.register_listener(self.memory.on_revocation)
-            self.rbac.register_listener(self.vector_index.on_revocation)
-
-    def query(
-        self,
-        actor: str,
-        session_id: str,
-        query_text: str,
-        step_label: str = "",
-        strategy: str = "direct",
-        tenant_id: Optional[str] = None,
-        apply_latency_sleep: bool = False,
-        simulated_time_offset_s: float = 0.0,
-    ) -> PipelineQueryResult:
+        The vector index itself (Chroma collection) is reused across trials because
+        re-ingesting it is the expensive part.
         """
-        Execute an end-to-end RAG query through the active mode pipeline.
-        """
-        t0 = time.perf_counter()
-        self._query_counter += 1
-
-        user_tenant = tenant_id or self.rbac.get_user_tenant(actor)
-        last_revocation_ts = self.rbac.last_revocation_time()
-        now_ts = time.time() + simulated_time_offset_s
-        rel_time_s = max(0.0, now_ts - last_revocation_ts) if last_revocation_ts else 0.0
-
-        # 1. Embed query
-        q_emb: np.ndarray = self.embedder.encode(
-            query_text, normalize_embeddings=True, show_progress_bar=False
-        )
-
-        # ---------------------------------------------------------------------
-        # 2. Semantic Cache Check (§3.4, §3.6, Fix 2)
-        # ---------------------------------------------------------------------
-        cache_result = self.cache.get(
-            query_embedding=q_emb,
-            user_id=actor if self.mode == "mitigated" else None,
-            tenant_id=user_tenant if self.mode == "mitigated" else None,
-            rbac=self.rbac if self.mode == "mitigated" else None,
-            mode_override=self.mode,
-            current_time=now_ts,
-        )
-
-        if cache_result is not None:
-            entry, cache_sim = cache_result
-            raw_latency_ms = (time.perf_counter() - t0) * 1000.0
-            gt_restricted = self._check_restricted(entry.doc_ids)
-
-            if self.mode == "mitigated":
-                norm_resp, meta = self.normalizer.normalize(
-                    raw_similarity=cache_sim,
-                    raw_reranker=cache_sim,
-                    raw_latency_ms=raw_latency_ms,
-                    response_text=entry.response,
-                    raw_refusal_type=None,
-                    has_accessible_docs=True,
-                    apply_sleep=apply_latency_sleep,
-                )
-                final_response = norm_resp
-                eff_latency_ms = meta.effective_latency_ms
-                norm_sim = meta.quantized_similarity
-                sim_band = meta.similarity_band
-                norm_rrk = meta.quantized_reranker
-            else:
-                final_response = entry.response
-                eff_latency_ms = raw_latency_ms
-                norm_sim = cache_sim
-                sim_band = "High" if cache_sim >= 0.70 else "Medium"
-                norm_rrk = cache_sim
-
-            log_row = self.logger.log(
-                relative_time_s=rel_time_s,
-                query_count_since_revocation=self._query_counter,
-                mode=self.mode,
-                actor=actor,
-                tenant_id=user_tenant or "",
-                session_id=session_id,
-                query=query_text,
-                raw_similarity_score=cache_sim,
-                normalized_similarity_score=norm_sim,
-                similarity_band=sim_band,
-                raw_reranker_score=cache_sim,
-                normalized_reranker_score=norm_rrk,
-                latency_ms=raw_latency_ms,
-                normalized_latency_ms=eff_latency_ms,
-                retrieved_doc_ids=entry.doc_ids,
-                accessible_doc_ids=entry.doc_ids,
-                ground_truth_restricted=gt_restricted,
-                response_text=final_response,
-                refusal_flag=False,
-                refusal_type=None,
-                cache_hit=True,
-                step_label=step_label,
-                strategy=strategy,
-            )
-
-            return PipelineQueryResult(
-                response=final_response,
-                retrieved_doc_ids=entry.doc_ids,
-                accessible_doc_ids=entry.doc_ids,
-                raw_similarity_score=cache_sim,
-                normalized_similarity_score=norm_sim,
-                similarity_band=sim_band,
-                raw_reranker_score=cache_sim,
-                normalized_reranker_score=norm_rrk,
-                raw_latency_ms=raw_latency_ms,
-                effective_latency_ms=eff_latency_ms,
-                cache_hit=True,
-                refusal_flag=False,
-                refusal_type=None,
-                ground_truth_restricted=gt_restricted,
-                log_row=log_row,
-            )
-
-        # ---------------------------------------------------------------------
-        # 3. Vector Retrieval
-        # ---------------------------------------------------------------------
-        accessible_set = self.rbac.accessible_docs(actor)
-
-        if self.mode == "mitigated":
-            # Pre-filtered retrieval strictly within tenant & user ACL
-            retrieved = self.vector_index.query(
-                query_embedding=q_emb,
-                top_k=self.top_k,
-                user_tenant=user_tenant,
-                accessible_doc_ids=accessible_set,
-                mode_override="mitigated",
-            )
-            all_retrieved_ids = [r[0] for r in retrieved]
-            accessible = retrieved
-            accessible_ids = all_retrieved_ids
+        self.acm = AccessControlManager.from_iam(self.corpus.iam, self.corpus.docs, self.clock)
+        policy = SyncPolicy.parse(self.cfg.sync)
+        if self.index is None:
+            self.index = VectorIndex(self.corpus.chunks, self._chunk_embeddings, self.acm, policy,
+                                     self.clock, self.rng)
         else:
-            # Baseline: Flat global retrieval across all tenants/docs
-            retrieved = self.vector_index.query(
-                query_embedding=q_emb,
-                top_k=self.top_k,
-                user_tenant=None,
-                accessible_doc_ids=None,
-                mode_override="baseline",
-            )
-            all_retrieved_ids = [r[0] for r in retrieved]
-            # Post-retrieval RBAC filtering
-            accessible = [r for r in retrieved if self.rbac.has_access(actor, r[0])]
-            accessible_ids = [r[0] for r in accessible]
+            self.index.rebind(self.acm)
+        self.cache = SemanticCache(self.clock, self.acm, self.cfg.cache_ttl_s, self.cfg.cache_threshold,
+                                   self.m.cache_scope, self.m.cache_evict, self.m.cache_lazy_check)
+        self.memory = SessionMemory(self.acm, self.cfg.summary_after, self.cfg.keep_recent,
+                                    self.m.taint_transitive, self.m.memory_purge, self.m.memory_lazy_check)
+        self._since_rev: dict[str, tuple[float, int]] = {}   # user -> (revocation time, queries since)
 
-        raw_top_sim = retrieved[0][1] if retrieved else 0.0
+    def close(self) -> None:
+        if self.index is not None:
+            self.index.close()
 
-        # ---------------------------------------------------------------------
-        # 4. Cross-Encoder Reranking
-        # ---------------------------------------------------------------------
-        if self.mode == "mitigated":
-            reranked = self.reranker.rerank(query_text, accessible, top_k=self.top_k)
-            raw_top_rrk = reranked[0][2] if reranked else 0.0
-            docs_for_generation = [(r[0], r[1], r[3]) for r in reranked]
+    # ---- Request handling ---------------------------------------------------
+
+    def handle(self, user: str, session: str, query: str) -> tuple[ApiResponse, Truth]:
+        t0 = self.clock.now()
+        m = self.m
+        tenant = self.acm.tenant_of(user)
+        truth = Truth(query_id=next(self._qid), t=t0, user=user, tenant=tenant, session=session, query=query,
+                      model=self.llm.model_id)
+        last_rev = self.acm.last_revocation_time(user)
+        if last_rev is not None:
+            prev = self._since_rev.get(user)
+            n = prev[1] + 1 if prev and prev[0] == last_rev else 1
+            self._since_rev[user] = (last_rev, n)
+            truth.t_since_revocation_s, truth.queries_since_revocation = t0 - last_rev, n
+        q_emb = self.embedder.encode([query])[0]
+
+        hit = self.cache.get(q_emb, user, tenant)
+        if hit is not None:
+            entry, sim = hit
+            truth.cache_hit, truth.cache_sim = True, sim
+            truth.cache_creator, truth.cache_age_s = entry.created_by, t0 - entry.created_at
+            truth.source_docs = list(entry.source_docs)
+            text, taint = entry.response, entry.taint
+            sources, conf, rr = list(entry.sources), entry.confidence, entry.rerank_confidence
         else:
-            # Baseline: Reranks full candidate set before post-filtering
-            reranked_all = self.reranker.rerank(query_text, retrieved, top_k=self.top_k)
-            raw_top_rrk = reranked_all[0][2] if reranked_all else 0.0
-            docs_for_generation = [
-                (r[0], r[1], r[3]) for r in reranked_all
-                if self.rbac.has_access(actor, r[0])
-            ]
+            text, taint, sources, conf, rr = self._generate(user, tenant, session, query, q_emb, truth)
 
-        # Determine refusal conditions
-        has_accessible_docs = len(docs_for_generation) > 0
-        raw_refusal_type: Optional[str] = None
-        if not has_accessible_docs:
-            if self.mode == "baseline":
-                raw_refusal_type = "access_denied" if all_retrieved_ids else "not_found"
-            else:
-                raw_refusal_type = "standardized_refusal"
+        self.memory.append(session, user, "user", query, EMPTY)
+        self.memory.append(session, user, "assistant", text, taint)
 
-        # ---------------------------------------------------------------------
-        # 5. Conversational Memory & LLM Generation (Fix 5: Fast Refusal Path)
-        # ---------------------------------------------------------------------
-        memory_ctx = self.memory.get_context(session_id)
+        truth.response_taint = sorted(taint)
+        truth.raw_confidence, truth.raw_rerank_confidence = conf, rr
+        truth.response = text
+        if m.score_quantize:
+            sources = [(title, quantize(s)) for title, s in sources]
+            conf, rr = quantize(conf), quantize(rr)
 
-        if self.mode == "mitigated" and not has_accessible_docs:
-            # Fast, normalized refusal path -- avoids expensive remote LLM calls for unauthorized queries
-            raw_response = self.normalizer.standard_refusal_message
+        elapsed = self.clock.now() - t0
+        truth.server_latency_ms = elapsed * 1000.0
+        if m.latency_pad:
+            extra = pad_seconds(elapsed, m.pad_strategy, m.pad_ms, self.rng)
+            self.clock.sleep(extra)
+            truth.pad_ms = extra * 1000.0
+        return ApiResponse(text=text, sources=sources, confidence=conf, rerank_confidence=rr), truth
+
+    def _generate(self, user, tenant, session, query, q_emb, truth: Truth):
+        m, cfg = self.m, self.cfg
+        cands = self.index.query(q_emb, cfg.top_k, user, tenant, prefilter=m.acl_prefilter)
+        relevant = [c for c in cands if c.score >= cfg.min_relevance]
+        truth.candidate_docs = [c.doc_id for c in relevant]
+        truth.candidate_scores = [round(c.score, 4) for c in relevant]
+
+        authorized = [c for c in relevant if c.index_allows]
+        if m.live_acl_check:
+            truth.live_denied_docs = sorted({c.doc_id for c in authorized if not self.acm.has_access(user, c.doc_id)})
+            authorized = [c for c in authorized if self.acm.has_access(user, c.doc_id)]
+
+        # The ranking stage sees post-filter candidates only when filtering happens inside retrieval.
+        ranked_set = authorized if m.acl_prefilter else relevant
+        conf = max((c.score for c in ranked_set), default=0.0)
+        rr_scores = self.reranker.score(query, [c.text for c in ranked_set])
+        rr = max(rr_scores, default=0.0)
+        rr_by_chunk = dict(zip((c.chunk_id for c in ranked_set), rr_scores))
+        gen = sorted(authorized, key=lambda c: -rr_by_chunk.get(c.chunk_id, 0.0))[:cfg.gen_k]
+        truth.gen_docs = list(dict.fromkeys(c.doc_id for c in gen))
+        truth.source_docs = list(truth.gen_docs)
+        truth.stale_docs_used = sorted({c.doc_id for c in gen if not self.acm.has_access(user, c.doc_id)})
+
+        reason = "" if gen else ("access_denied" if relevant else "not_found")
+        refusal = refusal_text(reason or "not_found", m.uniform_refusal)
+        turns = self.memory.context(session, user)
+        truth.memory_turns = len(turns)
+
+        if not gen and m.fast_refusal:
+            text, taint = refusal, EMPTY
         else:
-            raw_response = self.llm.generate(memory_ctx, docs_for_generation, query_text)
-
-        # Store in cache & memory ONLY when valid accessible documents are returned (Fix 2)
-        if has_accessible_docs:
-            self.cache.put(
-                query_embedding=q_emb,
-                response=raw_response,
-                doc_ids=accessible_ids,
-                tenant_id=user_tenant,
-                created_by=actor,
-                timestamp=now_ts,
+            g = self.llm.answer(
+                query,
+                [(c.title, c.text) for c in gen],
+                [MemoryItem(t.role, t.content) for t in turns],
+                refusal,
             )
+            truth.llm_called, truth.llm_cached, truth.llm_latency_ms = True, g.cached, g.latency_s * 1000.0
+            text = g.text
+            taint = response_taint((c.doc_id for c in gen), (t.taint for t in turns), m.taint_transitive)
 
-        self.memory.append(
-            session_id=session_id,
-            role="user",
-            content=query_text,
-            referenced_doc_ids=accessible_ids,
-            user_id=actor,
-        )
-        self.memory.append(
-            session_id=session_id,
-            role="assistant",
-            content=raw_response,
-            referenced_doc_ids=accessible_ids,
-            user_id=actor,
-        )
-
-        raw_latency_ms = (time.perf_counter() - t0) * 1000.0
-        gt_restricted = self._check_restricted(all_retrieved_ids)
-
-        # ---------------------------------------------------------------------
-        # 6. Metadata Normalization & Output Construction
-        # ---------------------------------------------------------------------
-        if self.mode == "mitigated":
-            final_response, meta = self.normalizer.normalize(
-                raw_similarity=raw_top_sim,
-                raw_reranker=raw_top_rrk,
-                raw_latency_ms=raw_latency_ms,
-                response_text=raw_response,
-                raw_refusal_type=raw_refusal_type,
-                has_accessible_docs=has_accessible_docs,
-                apply_sleep=apply_latency_sleep,
-            )
-            eff_latency_ms = meta.effective_latency_ms
-            norm_sim = meta.quantized_similarity
-            sim_band = meta.similarity_band
-            norm_rrk = meta.quantized_reranker
-            final_refusal_type = meta.standardized_refusal_type
-        else:
-            final_response = raw_response
-            eff_latency_ms = raw_latency_ms
-            norm_sim = raw_top_sim
-            sim_band = "High" if raw_top_sim >= 0.70 else ("Medium" if raw_top_sim >= 0.40 else "Low")
-            norm_rrk = raw_top_rrk
-            final_refusal_type = raw_refusal_type
-
-        refusal_flag = not has_accessible_docs
-
-        log_row = self.logger.log(
-            relative_time_s=rel_time_s,
-            query_count_since_revocation=self._query_counter,
-            mode=self.mode,
-            actor=actor,
-            tenant_id=user_tenant or "",
-            session_id=session_id,
-            query=query_text,
-            raw_similarity_score=raw_top_sim,
-            normalized_similarity_score=norm_sim,
-            similarity_band=sim_band,
-            raw_reranker_score=raw_top_rrk,
-            normalized_reranker_score=norm_rrk,
-            latency_ms=raw_latency_ms,
-            normalized_latency_ms=eff_latency_ms,
-            retrieved_doc_ids=all_retrieved_ids,
-            accessible_doc_ids=accessible_ids,
-            ground_truth_restricted=gt_restricted,
-            response_text=final_response,
-            refusal_flag=refusal_flag,
-            refusal_type=final_refusal_type,
-            cache_hit=False,
-            step_label=step_label,
-            strategy=strategy,
-        )
-
-        return PipelineQueryResult(
-            response=final_response,
-            retrieved_doc_ids=all_retrieved_ids,
-            accessible_doc_ids=accessible_ids,
-            raw_similarity_score=raw_top_sim,
-            normalized_similarity_score=norm_sim,
-            similarity_band=sim_band,
-            raw_reranker_score=raw_top_rrk,
-            normalized_reranker_score=norm_rrk,
-            raw_latency_ms=raw_latency_ms,
-            effective_latency_ms=eff_latency_ms,
-            cache_hit=False,
-            refusal_flag=refusal_flag,
-            refusal_type=final_refusal_type,
-            ground_truth_restricted=gt_restricted,
-            log_row=log_row,
-        )
-
-    def _check_restricted(self, doc_ids: list[str]) -> bool:
-        return any(
-            self.doc_metadata.get(d, {}).get("restricted", False)
-            for d in doc_ids
-        )
+        refused = text.strip() == refusal.strip()
+        truth.refused = refused
+        truth.refusal_reason = reason if refused else ""
+        sources = [(c.title, c.score) for c in gen] if not refused else []
+        if gen and not refused:
+            self.cache.put(CacheEntry(
+                embedding=q_emb, query=query, response=text, sources=sources, confidence=conf,
+                rerank_confidence=rr, taint=taint, source_docs=tuple(truth.gen_docs), tenant_id=tenant, created_by=user,
+                created_at=self.clock.now(),
+            ))
+        return text, taint, sources, conf, rr
 
 
-# Backward-compatible alias
-NaiveRAGPipeline = SecureRAGPipeline
-QueryResult = PipelineQueryResult
+class Client:
+    """Black-box API client. Measures latency itself and applies the exposure profile."""
+
+    def __init__(self, pipeline: RAGPipeline, exposure: str, logger: Optional[RunLogger] = None) -> None:
+        if exposure not in EXPOSURE_PROFILES:
+            raise ValueError(f"exposure must be one of {EXPOSURE_PROFILES}")
+        self.pipeline = pipeline
+        self.exposure = exposure
+        self.logger = logger
+
+    def ask(self, user: str, session: str, query: str, **tags) -> Observation:
+        clock = self.pipeline.clock
+        t0 = clock.now()
+        resp, truth = self.pipeline.handle(user, session, query)
+        latency_ms = (clock.now() - t0) * 1000.0
+        truth.observed_latency_ms = latency_ms
+        obs = Observation(text=resp.text, latency_ms=latency_ms)
+        if self.exposure in ("with_sources", "with_reranker"):
+            obs = Observation(text=resp.text, latency_ms=latency_ms,
+                              sources=tuple((t, round(s, 4)) for t, s in resp.sources),
+                              confidence=round(resp.confidence, 4))
+        if self.exposure == "with_reranker":
+            obs = Observation(text=obs.text, latency_ms=latency_ms, sources=obs.sources,
+                              confidence=obs.confidence, rerank_confidence=round(resp.rerank_confidence, 4))
+        if self.logger is not None:
+            self.logger.log(tags=tags, truth=asdict(truth), obs=asdict(obs))
+        return obs

@@ -1,0 +1,15 @@
+# RQ1: how much leaks after revocation, and through which artifact?
+# Start from the full defense and re-open exactly one derived artifact at a time.
+name: rq1_surfaces
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  preset: full
+  sync: periodic:86400          # daily crawl, as M365 connectors did until 2026
+  events: 50
+grid:
+  open_surface: [none, index, cache, memory]
+  revocation_type: [single_doc, role, user_offboard]

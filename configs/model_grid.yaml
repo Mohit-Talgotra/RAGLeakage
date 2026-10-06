@@ -1,0 +1,13 @@
+# Robustness grid across generators and embedders (Phase 5). Needs GROQ_API_KEY and a
+# local Ollama server (ollama pull llama3.1:8b). Generations are cached under .cache/llm/.
+name: model_grid
+experiment: revocation
+seeds: 5
+base:
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  sync: periodic:86400
+  events: 20
+grid:
+  llm_backend: [groq, ollama]
+  embedder: [all-MiniLM-L6-v2, BAAI/bge-small-en-v1.5]
+  preset: [baseline, full]

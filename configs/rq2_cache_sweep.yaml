@@ -1,0 +1,15 @@
+# RQ2 (cache): similarity threshold x TTL sweep on the realistic tenant-scoped cache.
+name: rq2_cache_sweep
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  preset: baseline
+  sync: live                    # isolate the cache surface
+  summary_after: 0
+  events: 40
+grid:
+  cache_threshold: [0.80, 0.85, 0.90, 0.95]
+  cache_ttl_s: [600, 3600, 21600]
