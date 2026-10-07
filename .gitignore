@@ -7,3 +7,4 @@ results/
 .cache/
 *.partial
 .pytest_cache/
+miscellaneous
