@@ -1,0 +1,22 @@
+# RQ5 (collateral): what does transitive taint cost the victim's *remaining* access?
+# After revocation, the victim also asks about every warmed-up doc they still may read, in the
+# same session (memory path) and a fresh one. retained_recall_* = share of the facts told at
+# warm-up that still come back; full purges summaries that mix revoked and retained content.
+name: rq5_collateral
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  sync: periodic:86400
+  events: 40
+  warm_restricted: 2
+  probe_retained: true
+grid:
+  revocation_type: [single_doc, role]
+variants:
+  - {variant: baseline, preset: baseline}
+  - {variant: legacy, preset: legacy}
+  - {variant: full, preset: full}
+  - {variant: full_no_transitive_taint, preset: full, taint_transitive: false}

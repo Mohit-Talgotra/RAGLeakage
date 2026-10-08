@@ -1,0 +1,2 @@
+cell,bucket_ms,AUC_bucket_only,world1_bucket1,world1_bucket2,world1_bucket3+,world0_bucket1,world0_bucket2,world0_bucket3+
+preset=full,500.0,0.508,0.082,0.570,0.348,0.087,0.579,0.333

@@ -1,0 +1,12 @@
+cell,vs,delta_LM,p,pairs
+"cache_threshold=0.8,cache_ttl_s=3600","cache_threshold=0.8,cache_ttl_s=600","0.004 [0.000, 0.012]",0.7540,200
+"cache_threshold=0.8,cache_ttl_s=21600","cache_threshold=0.8,cache_ttl_s=600","0.004 [0.000, 0.012]",0.7540,200
+"cache_threshold=0.85,cache_ttl_s=600","cache_threshold=0.8,cache_ttl_s=600","-0.045 [-0.072, -0.022]",0.0000,200
+"cache_threshold=0.85,cache_ttl_s=3600","cache_threshold=0.8,cache_ttl_s=600","-0.041 [-0.069, -0.016]",0.0020,200
+"cache_threshold=0.85,cache_ttl_s=21600","cache_threshold=0.8,cache_ttl_s=600","-0.041 [-0.069, -0.016]",0.0020,200
+"cache_threshold=0.9,cache_ttl_s=600","cache_threshold=0.8,cache_ttl_s=600","-0.092 [-0.128, -0.058]",0.0000,200
+"cache_threshold=0.9,cache_ttl_s=3600","cache_threshold=0.8,cache_ttl_s=600","-0.092 [-0.128, -0.058]",0.0000,200
+"cache_threshold=0.9,cache_ttl_s=21600","cache_threshold=0.8,cache_ttl_s=600","-0.092 [-0.128, -0.058]",0.0000,200
+"cache_threshold=0.95,cache_ttl_s=600","cache_threshold=0.8,cache_ttl_s=600","-0.206 [-0.253, -0.159]",0.0000,200
+"cache_threshold=0.95,cache_ttl_s=3600","cache_threshold=0.8,cache_ttl_s=600","-0.206 [-0.253, -0.159]",0.0000,200
+"cache_threshold=0.95,cache_ttl_s=21600","cache_threshold=0.8,cache_ttl_s=600","-0.206 [-0.253, -0.159]",0.0000,200

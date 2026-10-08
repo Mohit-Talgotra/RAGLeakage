@@ -1,0 +1,18 @@
+# Review item 12: cost of live authorization when IAM is a remote service. iam_rpc_ms adds one
+# batched IAM round trip per enforcement point (live ACL check, lazy cache check, lazy memory
+# check) to the simulated clock. Zanzibar reports low-millisecond checks; 10 ms is a slow service.
+# The full preset pads to 500 ms buckets, which absorbs small costs; full_nopad shows them raw.
+name: rq5_overhead
+experiment: utility
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  queries: 300
+grid:
+  iam_rpc_ms: [0, 2, 10]
+variants:
+  - {variant: baseline, preset: baseline}
+  - {variant: full, preset: full}
+  - {variant: full_nopad, preset: full, latency_pad: false}

@@ -89,6 +89,10 @@ def features(obs: dict, query: str, strategy: str = "") -> dict[str, float]:
     Unexposed fields become -1 so one model shape serves every profile."""
     text = obs["text"]
     low = text.lower()
+    # The attacker is a remote API client: network jitter hides anything finer than ~1 ms.
+    # Below that the simulator's latency is float noise from the padding arithmetic and
+    # real CPU time outside the padded section (~0.06 ms), not a signal a real attacker has.
+    latency = round(float(obs["latency_ms"]))
     q = set(_WORD.findall(query.lower())) - _STOP
     t = set(_WORD.findall(low))
     sources = obs.get("sources")
@@ -97,8 +101,8 @@ def features(obs: dict, query: str, strategy: str = "") -> dict[str, float]:
         "n_sources": float(len(sources)) if sources is not None else -1.0,
         "top_source_score": max((s for _, s in sources), default=0.0) if sources is not None else -1.0,
         "rerank_confidence": _num(obs.get("rerank_confidence")),
-        "latency_ms": float(obs["latency_ms"]),
-        "log_latency": math.log1p(max(0.0, float(obs["latency_ms"]))),
+        "latency_ms": latency,
+        "log_latency": math.log1p(max(0.0, latency)),
         "refusal_words": float(sum(w in low for w in _REFUSAL_WORDS)),
         "denied_words": float(sum(w in low for w in _DENIED_WORDS)),
         "text_words": float(len(text.split())),

@@ -1,0 +1,18 @@
+# RQ3 with a real generator: does existence inference change when answers come from
+# Qwen2.5-7B-Instruct (Ollama) instead of the stub? Smaller than rq3_existence (8 targets
+# per tenant, 5 seeds) because every generation is a real model call; latency is real too.
+name: rq3_existence_7b
+experiment: existence
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: ollama
+  llm_model: qwen2.5:7b
+  exposure: with_reranker
+  attackers: [insider, outsider]
+  victim_warmup: 0.5
+  sync: live
+  targets_per_tenant: 8
+grid:
+  preset: [strawman, baseline, full]

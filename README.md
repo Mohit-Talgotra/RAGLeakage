@@ -25,17 +25,19 @@ uv run python analyze.py results/smoke
 
 | RQ | Config | What it measures |
 |---|---|---|
-| RQ1 | `configs/rq1_surfaces.yaml` | Leakage by artifact. Starts from the full defense and re-opens one artifact at a time, for each of 3 revocation types. |
+| RQ1 | `configs/rq1_surfaces.yaml` | Leakage by artifact. Starts from the full defense and re-opens one artifact at a time, for each of 3 revocation types. `LM_all_lost` measures the blast radius: secrets of every warmed-up document the user lost. |
 | RQ2 | `configs/rq2_revocation_window.yaml`, `rq2_cache_sweep.yaml` | Leakage lifetime (Kaplan–Meier survival) under periodic/event ACL sync and cache TTL / threshold sweeps, compared with the analytic Δ/2 staleness. |
 | RQ3 | `configs/rq3_existence.yaml` | Twin-world existence inference. A learned attacker is trained on shadow tenants t1–t3 and tested on t4–t5. Reports AUC, TPR@1%FPR and balanced accuracy for each channel and exposure profile. |
 | RQ4 | `configs/rq4_ablation_revocation.yaml`, `rq4_ablation_existence.yaml` | Leave-one-out ablation from the full defense, plus backfiring variants (fast refusal path, 30 ms padding). |
-| RQ5 | `configs/rq5_utility.yaml` | Cost of security: Recall@k, nDCG@k, correctness, over-refusal, p50/p95 latency, cache hit rate. |
+| RQ5 | `configs/rq5_utility.yaml`, `rq5_leakage.yaml` | Cost of security: Recall@k, nDCG@k, correctness, over-refusal, p50/p95 latency, cache hit rate. `rq5_leakage` gives the leakage axis of the Pareto plot. |
 | — | `configs/model_grid.yaml` | Robustness across generators (Groq `gpt-oss-120b`, local Ollama) and embedders. |
+| Review | `rq5_collateral`, `rq6_taint_stress`, `rq_baselines_{revocation,existence}`, `rq5_overhead`, `model_grid_7b`, `rq3_existence_7b`, `model_grid_groq`, `enron_*` | Review-round additions: collateral cost of transitive taint, taint-breaking cases, practice baselines (live post/pre-filter), remote-IAM overhead, Qwen2.5-7B, GPT-OSS-120B (Groq), EnronQA real-text track. All in `scripts/run_review.sh`; the judge sample is `scripts/judge_sample.py`. |
+| — | `configs/model_grid_local.yaml`, `rq3_existence_local.yaml` | Real-LLM check with local Qwen2.5-3B via Ollama (`ollama pull qwen2.5:3b`): revocation stub vs Qwen paired on events, and RQ3 with Qwen. |
 
 ```bash
 uv run python run.py --config configs/rq2_revocation_window.yaml --seeds 5
 uv run python analyze.py results/rq2_revocation_window
-uv run python analyze.py results/rq5_utility --leakage results/rq1_surfaces   # Pareto plot
+uv run python analyze.py results/rq5_utility --leakage results/rq5_leakage   # Pareto plot
 ```
 
 `run.py` writes one JSONL file per (cell, seed) and skips runs it has already finished. `analyze.py` writes `analysis/summary.md`, CSVs and PNG figures. All confidence intervals are 95% bootstrap intervals. Comparisons between configurations are paired on the same seeds and revocation events.
@@ -100,5 +102,5 @@ Not done yet:
 
 - **EnronQA real-data track.** It needs the dataset download and an adapter.
 - **LLM-written corpus text.** The v2 corpus is template-generated. It is deterministic and committed, but the plan suggested having an LLM write it.
-- **Real Groq / Ollama runs and the LLM paraphrase judge** (`analyze.py --judge llm`). The backends, the judge and the disk cache are implemented, but they have not been run against a live API.
+- **Groq runs and the LLM paraphrase judge** (`analyze.py --judge llm`). Ollama has been run with Qwen2.5-3B (`model_grid_local`, `rq3_existence_local`); Groq and the LLM judge have not been run against a live API.
 - **Phase 6 case study.**

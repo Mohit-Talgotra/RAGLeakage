@@ -9,6 +9,8 @@ base:
   preset: full
   sync: event:0.05:86400        # lossy webhooks, daily backstop crawl
   events: 40
+  # Same probe grid as rq2_revocation_window, so lost-webhook lifetimes are comparable.
+  probe_times: [0, 60, 300, 900, 1800, 3600, 7200, 14400, 21600, 43200, 64800, 86400, 129600, 172800]
 grid:
   ablate: [none, acl_prefilter, live_acl_check, cache_evict, cache_lazy_check, memory_purge,
            memory_lazy_check, taint_transitive]

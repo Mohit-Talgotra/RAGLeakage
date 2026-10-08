@@ -1,0 +1,16 @@
+# Real-text track (review item 1): post-revocation leakage on EnronQA emails, stub LLM.
+# Build the corpus first: python scripts/build_enron_corpus.py (data/enron/).
+name: enron_revocation
+experiment: revocation
+seeds: 5
+base:
+  corpus: enron
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  sync: periodic:86400
+  events: 30
+  warm_restricted: 2
+grid:
+  preset: [baseline, full]
+  revocation_type: [single_doc, role]

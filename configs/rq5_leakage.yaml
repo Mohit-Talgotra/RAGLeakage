@@ -1,0 +1,13 @@
+# RQ5 (security axis of the Pareto plot): post-revocation leakage per preset, under the
+# same daily crawl as RQ1. Plot: python analyze.py results/rq5_utility --leakage results/rq5_leakage
+name: rq5_leakage
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  sync: periodic:86400
+  events: 50
+grid:
+  preset: [strawman, baseline, legacy, full]

@@ -1,0 +1,91 @@
+{
+  "name": "rq3_existence_local",
+  "experiment": "existence",
+  "config": {
+    "name": "rq3_existence_local",
+    "experiment": "existence",
+    "seeds": 3,
+    "base": {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "ollama",
+      "llm_model": "qwen2.5:3b",
+      "exposure": "with_reranker",
+      "attackers": [
+        "insider",
+        "outsider"
+      ],
+      "victim_warmup": 0.5,
+      "sync": "live",
+      "targets_per_tenant": 8
+    },
+    "grid": {
+      "preset": [
+        "strawman",
+        "baseline",
+        "full"
+      ]
+    }
+  },
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "cells": [
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "ollama",
+      "llm_model": "qwen2.5:3b",
+      "exposure": "with_reranker",
+      "attackers": [
+        "insider",
+        "outsider"
+      ],
+      "victim_warmup": 0.5,
+      "sync": "live",
+      "targets_per_tenant": 8,
+      "experiment": "existence",
+      "preset": "strawman",
+      "cell_id": "preset=strawman-e0572772",
+      "label": "preset=strawman"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "ollama",
+      "llm_model": "qwen2.5:3b",
+      "exposure": "with_reranker",
+      "attackers": [
+        "insider",
+        "outsider"
+      ],
+      "victim_warmup": 0.5,
+      "sync": "live",
+      "targets_per_tenant": 8,
+      "experiment": "existence",
+      "preset": "baseline",
+      "cell_id": "preset=baseline-3a72d38b",
+      "label": "preset=baseline"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "ollama",
+      "llm_model": "qwen2.5:3b",
+      "exposure": "with_reranker",
+      "attackers": [
+        "insider",
+        "outsider"
+      ],
+      "victim_warmup": 0.5,
+      "sync": "live",
+      "targets_per_tenant": 8,
+      "experiment": "existence",
+      "preset": "full",
+      "cell_id": "preset=full-b06d526d",
+      "label": "preset=full"
+    }
+  ]
+}

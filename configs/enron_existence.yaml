@@ -1,0 +1,16 @@
+# Real-text track (review item 1): twin-world existence inference on EnronQA emails (stub LLM).
+name: enron_existence
+experiment: existence
+seeds: 5
+base:
+  corpus: enron
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  exposure: with_reranker
+  attackers: [insider, outsider]
+  victim_warmup: 0.5
+  sync: live
+  targets_per_tenant: 20
+grid:
+  preset: [strawman, baseline, full]

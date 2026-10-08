@@ -11,7 +11,9 @@ metrics.py -- Leakage, survival, inference and utility metrics with bootstrap CI
       cache hit rate.
 
 Confidence intervals are percentile bootstraps over the unit of analysis
-(revocation events, probes, queries). Paired comparisons resample matched pairs.
+(revocation events, probes, queries). Paired comparisons resample matched pairs; they also
+report a two-stage (seed, then event) clustered CI and a Wilcoxon signed-rank p-value,
+because a 2000-resample bootstrap p cannot resolve anything below 0.0005.
 """
 
 from __future__ import annotations
@@ -46,6 +48,46 @@ def paired_bootstrap(a: Sequence[float], b: Sequence[float], n: int = 2000, seed
     p = 2 * min((boots <= 0).mean(), (boots >= 0).mean())
     return {"diff": float(d.mean()), "lo": float(np.percentile(boots, 2.5)),
             "hi": float(np.percentile(boots, 97.5)), "p": float(min(1.0, p)), "n": int(len(d))}
+
+
+def cluster_bootstrap_ci(values: Sequence[float], groups: Sequence, n: int = 2000,
+                         seed: int = 0) -> tuple[float, float]:
+    """95% CI of the mean under a two-stage bootstrap: resample clusters (seeds), then units
+    (events) within each drawn cluster. Accounts for events sharing a seed's corpus state."""
+    v = np.asarray(values, float)
+    by: dict = {}
+    for x, g in zip(v, groups):
+        by.setdefault(g, []).append(x)
+    clusters = [np.asarray(xs) for xs in by.values()]
+    rng = np.random.default_rng(seed)
+    boots = np.empty(n)
+    for i in range(n):
+        picked = [clusters[j] for j in rng.integers(0, len(clusters), len(clusters))]
+        boots[i] = np.concatenate([c[rng.integers(0, len(c), len(c))] for c in picked]).mean()
+    return float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
+
+
+def paired_test(a: Sequence[float], b: Sequence[float], groups: Sequence) -> dict:
+    """paired_bootstrap plus a seed-clustered CI and an exact-style Wilcoxon signed-rank p (tied events with a zero difference are dropped, as in Wilcoxon 1945).
+
+    The bootstrap p cannot go below 1/n_resamples, so the Wilcoxon p is the one to report."""
+    from scipy.stats import wilcoxon
+    res = paired_bootstrap(a, b)
+    if res["n"] == 0:
+        return {**res, "lo_cluster": math.nan, "hi_cluster": math.nan, "p_wilcoxon": math.nan}
+    d = np.asarray(a, float) - np.asarray(b, float)
+    res["lo_cluster"], res["hi_cluster"] = cluster_bootstrap_ci(d, groups)
+    res["p_wilcoxon"] = 1.0 if not d.any() else float(wilcoxon(d, zero_method="wilcox").pvalue)
+    return res
+
+
+def fmt_p(p: float, n_boot: int | None = 2000) -> str:
+    """A bootstrap p of 0 means 'below the resolution', not zero (n_boot=None: analytic p)."""
+    if math.isnan(p):
+        return "n/a"
+    if p == 0:
+        return f"<{1 / n_boot:.4f}" if n_boot else "<1e-16"
+    return f"{p:.2g}" if p < 0.001 else f"{p:.4f}"
 
 
 # ---- Survival ---------------------------------------------------------------------

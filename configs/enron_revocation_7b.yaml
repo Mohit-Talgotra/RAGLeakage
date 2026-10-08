@@ -1,0 +1,18 @@
+# Real-text track with a real generator: EnronQA emails, Qwen2.5-7B (Ollama). Smaller than
+# enron_revocation (2 seeds x 12 events, 5 probe times) because emails make long prompts; the
+# events are the first 12 of seeds 0-1 of enron_revocation, so results pair with the stub on (seed, event).
+name: enron_revocation_7b
+experiment: revocation
+seeds: 2
+base:
+  corpus: enron
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: ollama
+  llm_model: qwen2.5:7b
+  sync: periodic:86400
+  events: 12
+  probe_times: [0, 3600, 43200, 86400, 172800]
+  warm_restricted: 2
+grid:
+  preset: [baseline, full]

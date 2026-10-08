@@ -59,6 +59,11 @@ class Corpus:
         return out
 
 
+def corpus_dir(name: str = "synthetic") -> Path:
+    """synthetic: data/ (generate_corpus.py); enron: data/enron/ (build_enron_corpus.py)."""
+    return DATA_DIR if name == "synthetic" else DATA_DIR / name
+
+
 def load_corpus(data_dir: Path = DATA_DIR, chunk_tokens: int = 300) -> Corpus:
     corpus_path = data_dir / "corpus.jsonl"
     if not corpus_path.exists():

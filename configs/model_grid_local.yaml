@@ -1,0 +1,15 @@
+# Real-LLM check, local only: does post-revocation leakage hold with a real generator?
+# Same events as the stub (paired on seed and event), Qwen2.5-3B-Instruct via Ollama
+# (ollama pull qwen2.5:3b). Generations are cached under .cache/llm/, so reruns are fast.
+name: model_grid_local
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_model: qwen2.5:3b
+  sync: periodic:86400
+  events: 20
+grid:
+  llm_backend: [stub, ollama]
+  preset: [baseline, full]

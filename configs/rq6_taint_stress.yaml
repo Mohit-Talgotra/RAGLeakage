@@ -1,0 +1,21 @@
+# Review item 2: a case built to break provenance taint. The revoked victim pastes the answer
+# they got before revocation into a fresh session (user input is untainted, assumption A1), has
+# the assistant rewrite it, then asks the target question there; a colleague without access then
+# asks the same question. launder_success: the victim's own answer disclosed the target;
+# LM_colleague: the laundered answer reached the colleague through the shared tenant cache. taint_user_input fingerprints
+# queries against restricted secrets and taints them. Needs a real LLM: the stub ignores pasted text.
+name: rq6_taint_stress
+experiment: revocation
+seeds: 2
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: ollama
+  preset: full
+  sync: periodic:86400
+  events: 20
+  launder: true
+  probe_times: [0, 3600, 86400]
+grid:
+  llm_model: [qwen2.5:7b, qwen2.5:3b]
+  taint_user_input: [false, true]

@@ -1,0 +1,83 @@
+{
+  "name": "model_grid_7b",
+  "experiment": "revocation",
+  "config": {
+    "name": "model_grid_7b",
+    "experiment": "revocation",
+    "seeds": 5,
+    "base": {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_model": "qwen2.5:7b",
+      "sync": "periodic:86400",
+      "events": 20
+    },
+    "grid": {
+      "llm_backend": [
+        "stub",
+        "ollama"
+      ],
+      "preset": [
+        "baseline",
+        "full"
+      ]
+    }
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "cells": [
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_model": "qwen2.5:7b",
+      "sync": "periodic:86400",
+      "events": 20,
+      "experiment": "revocation",
+      "llm_backend": "stub",
+      "preset": "baseline",
+      "cell_id": "llm_backend=stub,preset=baseline-a9cdeaf5",
+      "label": "llm_backend=stub,preset=baseline"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_model": "qwen2.5:7b",
+      "sync": "periodic:86400",
+      "events": 20,
+      "experiment": "revocation",
+      "llm_backend": "stub",
+      "preset": "full",
+      "cell_id": "llm_backend=stub,preset=full-74cd0b4a",
+      "label": "llm_backend=stub,preset=full"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_model": "qwen2.5:7b",
+      "sync": "periodic:86400",
+      "events": 20,
+      "experiment": "revocation",
+      "llm_backend": "ollama",
+      "preset": "baseline",
+      "cell_id": "llm_backend=ollama,preset=baseline-6f49a131",
+      "label": "llm_backend=ollama,preset=baseline"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_model": "qwen2.5:7b",
+      "sync": "periodic:86400",
+      "events": 20,
+      "experiment": "revocation",
+      "llm_backend": "ollama",
+      "preset": "full",
+      "cell_id": "llm_backend=ollama,preset=full-d5c25526",
+      "label": "llm_backend=ollama,preset=full"
+    }
+  ]
+}

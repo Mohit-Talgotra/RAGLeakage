@@ -91,7 +91,7 @@ class LLMClient:
     def _connect(self):
         if self.backend == "groq":
             from groq import Groq
-            return Groq(api_key=_require_env("GROQ_API_KEY"))
+            return Groq(api_key=_require_env("GROQ_API_KEY"), max_retries=8)  # free tier: 429s honour retry-after
         if self.backend == "openai":
             from openai import OpenAI
             return OpenAI(api_key=_require_env("OPENAI_API_KEY"))
