@@ -1,4 +1,6 @@
 # RQ2 (cache): similarity threshold x TTL sweep on the realistic tenant-scoped cache.
+# The fresh-session probe rewords the warm-up question (cosine ~0.79-0.98); an exact repeat
+# scores 1.0 and would hit at every threshold.
 name: rq2_cache_sweep
 experiment: revocation
 seeds: 5
@@ -9,6 +11,7 @@ base:
   preset: baseline
   sync: live                    # isolate the cache surface
   summary_after: 0
+  probe_paraphrase: true
   events: 40
 grid:
   cache_threshold: [0.80, 0.85, 0.90, 0.95]

@@ -1,0 +1,17 @@
+# Literature/practice baselines (review item 5): designs that authorize retrieval correctly
+# but have no hooks on derived artifacts. "baseline" stands for synced-ACL designs (vector-store
+# metadata filters, per-user indexes, HoneyBee-style role partitions); authz_prefilter and
+# authz_postfilter check live IAM (query-time security trimming; Zanzibar/ReBAC check-after-retrieve).
+name: rq_baselines_revocation
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: stub
+  sync: periodic:86400
+  events: 50
+  warm_restricted: 2
+grid:
+  preset: [baseline, authz_prefilter, authz_postfilter, full]
+  revocation_type: [single_doc, user_offboard]

@@ -1,0 +1,208 @@
+{
+  "name": "rq1_surfaces",
+  "experiment": "revocation",
+  "config": {
+    "name": "rq1_surfaces",
+    "experiment": "revocation",
+    "seeds": 5,
+    "base": {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2
+    },
+    "grid": {
+      "open_surface": [
+        "none",
+        "index",
+        "cache",
+        "memory"
+      ],
+      "revocation_type": [
+        "single_doc",
+        "role",
+        "user_offboard"
+      ]
+    }
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "cells": [
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "none",
+      "revocation_type": "single_doc",
+      "cell_id": "open_surface=none,revocation_type=single_doc-d39a13fb",
+      "label": "open_surface=none,revocation_type=single_doc"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "none",
+      "revocation_type": "role",
+      "cell_id": "open_surface=none,revocation_type=role-74d15f9f",
+      "label": "open_surface=none,revocation_type=role"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "none",
+      "revocation_type": "user_offboard",
+      "cell_id": "open_surface=none,revocation_type=user_offboard-728d7f06",
+      "label": "open_surface=none,revocation_type=user_offboard"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "index",
+      "revocation_type": "single_doc",
+      "cell_id": "open_surface=index,revocation_type=single_doc-45bb19e3",
+      "label": "open_surface=index,revocation_type=single_doc"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "index",
+      "revocation_type": "role",
+      "cell_id": "open_surface=index,revocation_type=role-8350fbed",
+      "label": "open_surface=index,revocation_type=role"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "index",
+      "revocation_type": "user_offboard",
+      "cell_id": "open_surface=index,revocation_type=user_offboard-fe2df415",
+      "label": "open_surface=index,revocation_type=user_offboard"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "cache",
+      "revocation_type": "single_doc",
+      "cell_id": "open_surface=cache,revocation_type=single_doc-197c39d5",
+      "label": "open_surface=cache,revocation_type=single_doc"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "cache",
+      "revocation_type": "role",
+      "cell_id": "open_surface=cache,revocation_type=role-0c407b53",
+      "label": "open_surface=cache,revocation_type=role"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "cache",
+      "revocation_type": "user_offboard",
+      "cell_id": "open_surface=cache,revocation_type=user_offboard-e7a8aeda",
+      "label": "open_surface=cache,revocation_type=user_offboard"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "memory",
+      "revocation_type": "single_doc",
+      "cell_id": "open_surface=memory,revocation_type=single_doc-9f062775",
+      "label": "open_surface=memory,revocation_type=single_doc"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "memory",
+      "revocation_type": "role",
+      "cell_id": "open_surface=memory,revocation_type=role-4c16d432",
+      "label": "open_surface=memory,revocation_type=role"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "preset": "full",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "open_surface": "memory",
+      "revocation_type": "user_offboard",
+      "cell_id": "open_surface=memory,revocation_type=user_offboard-4a0682d9",
+      "label": "open_surface=memory,revocation_type=user_offboard"
+    }
+  ]
+}

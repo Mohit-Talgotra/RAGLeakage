@@ -47,4 +47,11 @@ The package name is historical; it holds every preset, leaky and secure. Import 
 
 - The `min_relevance` default (0.25) is tuned for MiniLM. The hash embedder needs ~0.15 (tests use 0.15).
 - In the existence experiment with the ACL pre-filter on, the target is invisible to the attacker in both worlds. Metadata channels can then differ only through a shared cache. `rq4_ablation_existence.yaml` therefore also runs `acl_prefilter: false`.
+- The revocation experiment's fresh-session probe repeats the warm-up question verbatim (cosine 1.0), so it hits the cache at any threshold. Set `probe_paraphrase: true` (as `rq2_cache_sweep.yaml` does) whenever the cache threshold should matter.
+- Revocation `LM` counts only the target's secrets, so it can't tell revocation types apart. `LM_all_lost` counts every warmed-up doc the victim lost (offboarding loses all of them), using the extra `probe_kind="lost_doc"` probes.
+- `attacker.features()` rounds latency to whole milliseconds (a remote client's resolution). Without that, float noise from the padding arithmetic and sub-ms CPU time outside the padded section become a fake timing signal.
+- Revocation options (off by default, so older configs reproduce): `warm_restricted` (warm restricted docs too, so role revocations lose more than the target), `probe_retained` (collateral probes on docs the victim still holds), `launder` (paste-back plus a colleague probe). Target metrics use only `same_session`/`new_session` probes; `analyze.collect_events` keeps the other probe kinds out of LM.
+- User input is untainted (assumption A1 in `docs/TAINT_SOUNDNESS.md`); `taint_user_input` fingerprints queries against restricted secrets. `tests/test_taint_invariant.py` checks the taint invariant.
+- `corpus: enron` selects `data/enron/` (built by `scripts/build_enron_corpus.py` from EnronQA; gitignored, needs pyarrow). Enron has no public docs; existence probes fall back to internal mail for the comparison topic.
+- Paired tests report a Wilcoxon p (`p_wilcoxon`) and a seed-clustered CI; the bootstrap p cannot go below 1/2000.
 - Chroma runs in-process (`EphemeralClient`), one collection per pipeline. Always `pipeline.close()`. `pipeline.reset()` reuses the index (and restores removed docs) but rebuilds IAM, cache and memory.

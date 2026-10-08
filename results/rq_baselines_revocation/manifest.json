@@ -1,0 +1,142 @@
+{
+  "name": "rq_baselines_revocation",
+  "experiment": "revocation",
+  "config": {
+    "name": "rq_baselines_revocation",
+    "experiment": "revocation",
+    "seeds": 5,
+    "base": {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2
+    },
+    "grid": {
+      "preset": [
+        "baseline",
+        "authz_prefilter",
+        "authz_postfilter",
+        "full"
+      ],
+      "revocation_type": [
+        "single_doc",
+        "user_offboard"
+      ]
+    }
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "cells": [
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "baseline",
+      "revocation_type": "single_doc",
+      "cell_id": "preset=baseline,revocation_type=single_doc-9b980df3",
+      "label": "preset=baseline,revocation_type=single_doc"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "baseline",
+      "revocation_type": "user_offboard",
+      "cell_id": "preset=baseline,revocation_type=user_offboard-6a36aedc",
+      "label": "preset=baseline,revocation_type=user_offboard"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "authz_prefilter",
+      "revocation_type": "single_doc",
+      "cell_id": "preset=authz_prefilter,revocation_type=single_doc-b528e335",
+      "label": "preset=authz_prefilter,revocation_type=single_doc"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "authz_prefilter",
+      "revocation_type": "user_offboard",
+      "cell_id": "preset=authz_prefilter,revocation_type=user_offboard-37cbf6ed",
+      "label": "preset=authz_prefilter,revocation_type=user_offboard"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "authz_postfilter",
+      "revocation_type": "single_doc",
+      "cell_id": "preset=authz_postfilter,revocation_type=single_doc-e88ae6a4",
+      "label": "preset=authz_postfilter,revocation_type=single_doc"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "authz_postfilter",
+      "revocation_type": "user_offboard",
+      "cell_id": "preset=authz_postfilter,revocation_type=user_offboard-d20d0aab",
+      "label": "preset=authz_postfilter,revocation_type=user_offboard"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "full",
+      "revocation_type": "single_doc",
+      "cell_id": "preset=full,revocation_type=single_doc-2b1f960a",
+      "label": "preset=full,revocation_type=single_doc"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 50,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "full",
+      "revocation_type": "user_offboard",
+      "cell_id": "preset=full,revocation_type=user_offboard-822cc656",
+      "label": "preset=full,revocation_type=user_offboard"
+    }
+  ]
+}

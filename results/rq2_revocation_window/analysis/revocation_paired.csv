@@ -1,0 +1,12 @@
+cell,vs,delta_LM,CI_cluster,p,p_wilcoxon,pairs
+"sync=periodic:3600,cache_ttl_s=3600","sync=periodic:3600,cache_ttl_s=600","0.000 [0.000, 0.000]","[0.000, 0.000]",1.0000,1.0000,200
+"sync=periodic:3600,cache_ttl_s=86400","sync=periodic:3600,cache_ttl_s=600","0.000 [0.000, 0.000]","[0.000, 0.000]",1.0000,1.0000,200
+"sync=periodic:86400,cache_ttl_s=600","sync=periodic:3600,cache_ttl_s=600","0.036 [0.016, 0.060]","[0.008, 0.073]",<0.0005,0.0030,200
+"sync=periodic:86400,cache_ttl_s=3600","sync=periodic:3600,cache_ttl_s=600","0.036 [0.016, 0.060]","[0.008, 0.073]",<0.0005,0.0030,200
+"sync=periodic:86400,cache_ttl_s=86400","sync=periodic:3600,cache_ttl_s=600","0.036 [0.016, 0.060]","[0.008, 0.073]",<0.0005,0.0030,200
+"sync=event:0.0,cache_ttl_s=600","sync=periodic:3600,cache_ttl_s=600","-0.111 [-0.145, -0.076]","[-0.162, -0.065]",<0.0005,6.4e-08,200
+"sync=event:0.0,cache_ttl_s=3600","sync=periodic:3600,cache_ttl_s=600","-0.111 [-0.145, -0.076]","[-0.162, -0.065]",<0.0005,6.4e-08,200
+"sync=event:0.0,cache_ttl_s=86400","sync=periodic:3600,cache_ttl_s=600","-0.111 [-0.145, -0.076]","[-0.162, -0.065]",<0.0005,6.4e-08,200
+"sync=event:0.05:86400,cache_ttl_s=600","sync=periodic:3600,cache_ttl_s=600","-0.095 [-0.128, -0.062]","[-0.147, -0.049]",<0.0005,6.7e-07,200
+"sync=event:0.05:86400,cache_ttl_s=3600","sync=periodic:3600,cache_ttl_s=600","-0.095 [-0.128, -0.062]","[-0.147, -0.049]",<0.0005,6.7e-07,200
+"sync=event:0.05:86400,cache_ttl_s=86400","sync=periodic:3600,cache_ttl_s=600","-0.095 [-0.128, -0.062]","[-0.147, -0.049]",<0.0005,6.7e-07,200

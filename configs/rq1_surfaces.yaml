@@ -10,6 +10,7 @@ base:
   preset: full
   sync: periodic:86400          # daily crawl, as M365 connectors did until 2026
   events: 50
+  warm_restricted: 2            # also warm restricted docs, so role revocations can take more than the target
 grid:
   open_surface: [none, index, cache, memory]
   revocation_type: [single_doc, role, user_offboard]

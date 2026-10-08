@@ -3,7 +3,16 @@ __pycache__/
 *.pyc
 .env
 .chroma*/
-results/
 .cache/
 *.partial
 .pytest_cache/
+data/enron/
+release/
+.DS_Store
+paper_package*
+
+# Raw per-query logs (~1.5 GB) go to Zenodo, not git; keep analysis/ + manifest.json.
+results/*/runs/
+results/_superseded/
+results/_logs/
+results/smoke/

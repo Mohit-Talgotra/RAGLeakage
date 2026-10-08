@@ -1,0 +1,4 @@
+cell,vs,delta_LM,CI_cluster,p,p_wilcoxon,pairs
+"llm_backend=stub,preset=full","llm_backend=stub,preset=baseline","-0.646 [-0.702, -0.584]","[-0.743, -0.547]",<0.0005,3.4e-16,100
+"llm_backend=ollama,preset=baseline","llm_backend=stub,preset=baseline","0.097 [0.032, 0.169]","[0.011, 0.192]",0.0040,0.0040,100
+"llm_backend=ollama,preset=full","llm_backend=stub,preset=baseline","-0.646 [-0.702, -0.584]","[-0.743, -0.547]",<0.0005,3.4e-16,100

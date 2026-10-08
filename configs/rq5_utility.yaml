@@ -1,5 +1,5 @@
 # RQ5: what does security cost? Authorized queries only.
-# Pareto plot: python analyze.py results/rq5_utility --leakage results/rq1_surfaces
+# Pareto plot: python analyze.py results/rq5_utility --leakage results/rq5_leakage
 name: rq5_utility
 experiment: utility
 seeds: 5

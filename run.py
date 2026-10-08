@@ -108,7 +108,7 @@ def main() -> None:
     for cell in cells:
         key = (cell.get("embedder", "all-MiniLM-L6-v2"),
                cell.get("reranker", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
-               int(cell.get("chunk_tokens", 300)))
+               int(cell.get("chunk_tokens", 300)), cell.get("corpus", "synthetic"))
         if key not in envs:
             print(f"[run] loading embedder={key[0]} reranker={key[1]}", flush=True)
             envs[key] = Env.build(*key)

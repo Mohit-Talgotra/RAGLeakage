@@ -1,0 +1,93 @@
+{
+  "name": "enron_revocation",
+  "experiment": "revocation",
+  "config": {
+    "name": "enron_revocation",
+    "experiment": "revocation",
+    "seeds": 5,
+    "base": {
+      "corpus": "enron",
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 30,
+      "warm_restricted": 2
+    },
+    "grid": {
+      "preset": [
+        "baseline",
+        "full"
+      ],
+      "revocation_type": [
+        "single_doc",
+        "role"
+      ]
+    }
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "cells": [
+    {
+      "corpus": "enron",
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 30,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "baseline",
+      "revocation_type": "single_doc",
+      "cell_id": "preset=baseline,revocation_type=single_doc-74b80fd0",
+      "label": "preset=baseline,revocation_type=single_doc"
+    },
+    {
+      "corpus": "enron",
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 30,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "baseline",
+      "revocation_type": "role",
+      "cell_id": "preset=baseline,revocation_type=role-b521d1a4",
+      "label": "preset=baseline,revocation_type=role"
+    },
+    {
+      "corpus": "enron",
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 30,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "full",
+      "revocation_type": "single_doc",
+      "cell_id": "preset=full,revocation_type=single_doc-5f561a9c",
+      "label": "preset=full,revocation_type=single_doc"
+    },
+    {
+      "corpus": "enron",
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 30,
+      "warm_restricted": 2,
+      "experiment": "revocation",
+      "preset": "full",
+      "revocation_type": "role",
+      "cell_id": "preset=full,revocation_type=role-4f9e9883",
+      "label": "preset=full,revocation_type=role"
+    }
+  ]
+}

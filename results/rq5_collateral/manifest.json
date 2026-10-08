@@ -1,0 +1,174 @@
+{
+  "name": "rq5_collateral",
+  "experiment": "revocation",
+  "config": {
+    "name": "rq5_collateral",
+    "experiment": "revocation",
+    "seeds": 5,
+    "base": {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 40,
+      "warm_restricted": 2,
+      "probe_retained": true
+    },
+    "grid": {
+      "revocation_type": [
+        "single_doc",
+        "role"
+      ]
+    },
+    "variants": [
+      {
+        "variant": "baseline",
+        "preset": "baseline"
+      },
+      {
+        "variant": "legacy",
+        "preset": "legacy"
+      },
+      {
+        "variant": "full",
+        "preset": "full"
+      },
+      {
+        "variant": "full_no_transitive_taint",
+        "preset": "full",
+        "taint_transitive": false
+      }
+    ]
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "cells": [
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 40,
+      "warm_restricted": 2,
+      "probe_retained": true,
+      "experiment": "revocation",
+      "revocation_type": "single_doc",
+      "variant": "baseline",
+      "preset": "baseline",
+      "cell_id": "revocation_type=single_doc,variant=baseline-d88ecb10",
+      "label": "revocation_type=single_doc,variant=baseline"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 40,
+      "warm_restricted": 2,
+      "probe_retained": true,
+      "experiment": "revocation",
+      "revocation_type": "single_doc",
+      "variant": "legacy",
+      "preset": "legacy",
+      "cell_id": "revocation_type=single_doc,variant=legacy-85716b40",
+      "label": "revocation_type=single_doc,variant=legacy"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 40,
+      "warm_restricted": 2,
+      "probe_retained": true,
+      "experiment": "revocation",
+      "revocation_type": "single_doc",
+      "variant": "full",
+      "preset": "full",
+      "cell_id": "revocation_type=single_doc,variant=full-15a6b3d2",
+      "label": "revocation_type=single_doc,variant=full"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 40,
+      "warm_restricted": 2,
+      "probe_retained": true,
+      "experiment": "revocation",
+      "revocation_type": "single_doc",
+      "variant": "full_no_transitive_taint",
+      "preset": "full",
+      "taint_transitive": false,
+      "cell_id": "revocation_type=single_doc,variant=full_no_transitive_taint-edd80e22",
+      "label": "revocation_type=single_doc,variant=full_no_transitive_taint"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 40,
+      "warm_restricted": 2,
+      "probe_retained": true,
+      "experiment": "revocation",
+      "revocation_type": "role",
+      "variant": "baseline",
+      "preset": "baseline",
+      "cell_id": "revocation_type=role,variant=baseline-9342046d",
+      "label": "revocation_type=role,variant=baseline"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 40,
+      "warm_restricted": 2,
+      "probe_retained": true,
+      "experiment": "revocation",
+      "revocation_type": "role",
+      "variant": "legacy",
+      "preset": "legacy",
+      "cell_id": "revocation_type=role,variant=legacy-e828d3dd",
+      "label": "revocation_type=role,variant=legacy"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 40,
+      "warm_restricted": 2,
+      "probe_retained": true,
+      "experiment": "revocation",
+      "revocation_type": "role",
+      "variant": "full",
+      "preset": "full",
+      "cell_id": "revocation_type=role,variant=full-b55405ca",
+      "label": "revocation_type=role,variant=full"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "stub",
+      "sync": "periodic:86400",
+      "events": 40,
+      "warm_restricted": 2,
+      "probe_retained": true,
+      "experiment": "revocation",
+      "revocation_type": "role",
+      "variant": "full_no_transitive_taint",
+      "preset": "full",
+      "taint_transitive": false,
+      "cell_id": "revocation_type=role,variant=full_no_transitive_taint-adcf9068",
+      "label": "revocation_type=role,variant=full_no_transitive_taint"
+    }
+  ]
+}

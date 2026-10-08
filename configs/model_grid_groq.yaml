@@ -1,0 +1,15 @@
+# Best-effort large-model check on the Groq free tier (about 1000 requests/day). The first 10
+# events of seeds 0-1 are the same events as model_grid_7b, so results pair on (seed, event).
+# Generations are cached under .cache/llm/; rerun after a quota reset to continue.
+name: model_grid_groq
+experiment: revocation
+seeds: 2
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: groq
+  llm_model: openai/gpt-oss-120b
+  sync: periodic:86400
+  events: 10
+grid:
+  preset: [baseline, full]

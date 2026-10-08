@@ -12,6 +12,14 @@ Presets:
              30 ms floor padding). Kept to show that its fixes re-open channels.
 - full     : every mitigation, including transitive provenance taint and
              constant-shape responses.
+
+Designs from practice and the literature, mapped onto the same switches (RQ5 baselines):
+- baseline doubles as the synced-ACL design: metadata filters in the vector store, per-user
+  indexes, or HoneyBee-style role partitions all filter on a materialized copy of the ACL.
+- authz_postfilter : flat retrieval, then a live, consistent authorization check per chunk
+             (Zanzibar/ReBAC-style "check after retrieve"); nothing hooks the cache or memory.
+- authz_prefilter  : query-time security trimming against live IAM (pre-filter plus live
+             re-check); again no derived-artifact hooks.
 """
 
 from __future__ import annotations
@@ -33,6 +41,7 @@ class Mitigations:
     taint_transitive: bool = False   # response taint includes taint of memory turns in the prompt
     cache_lazy_check: bool = False   # on every cache read: user must still hold all taint docs
     memory_lazy_check: bool = False  # on every memory read: drop turns the user no longer may see
+    taint_user_input: bool = False   # taint queries that contain restricted secrets (pasted content)
     # Metadata normalization
     score_quantize: bool = False     # expose coarse score bands instead of raw floats
     uniform_refusal: bool = False    # one refusal text for not-found and access-denied
@@ -59,6 +68,8 @@ PRESETS: dict[str, Mitigations] = {
         score_quantize=True, uniform_refusal=True, latency_pad=True,
         pad_strategy="floor", pad_ms=30.0, fast_refusal=True,
     ),
+    "authz_postfilter": Mitigations(live_acl_check=True, cache_scope="tenant"),
+    "authz_prefilter": Mitigations(acl_prefilter=True, live_acl_check=True, cache_scope="tenant"),
     "full": Mitigations(
         acl_prefilter=True, live_acl_check=True, cache_scope="tenant", cache_evict=True,
         memory_purge=True, taint_transitive=True, cache_lazy_check=True, memory_lazy_check=True,

@@ -1,0 +1,53 @@
+{
+  "name": "model_grid_groq",
+  "experiment": "revocation",
+  "config": {
+    "name": "model_grid_groq",
+    "experiment": "revocation",
+    "seeds": 2,
+    "base": {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "groq",
+      "llm_model": "openai/gpt-oss-120b",
+      "sync": "periodic:86400",
+      "events": 10
+    },
+    "grid": {
+      "preset": [
+        "baseline",
+        "full"
+      ]
+    }
+  },
+  "seeds": [
+    0,
+    1
+  ],
+  "cells": [
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "groq",
+      "llm_model": "openai/gpt-oss-120b",
+      "sync": "periodic:86400",
+      "events": 10,
+      "experiment": "revocation",
+      "preset": "baseline",
+      "cell_id": "preset=baseline-fcc2df2b",
+      "label": "preset=baseline"
+    },
+    {
+      "embedder": "all-MiniLM-L6-v2",
+      "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "llm_backend": "groq",
+      "llm_model": "openai/gpt-oss-120b",
+      "sync": "periodic:86400",
+      "events": 10,
+      "experiment": "revocation",
+      "preset": "full",
+      "cell_id": "preset=full-9a34c5f0",
+      "label": "preset=full"
+    }
+  ]
+}

@@ -6,6 +6,21 @@ scored at run time (analyze.py does that from the logs).
   cache and their chat memory on a restricted target, access is revoked, then the victim
   re-probes at scheduled times (same session -> memory + cache + index; fresh session ->
   cache + index). Leakage over time per event gives LM and the survival curve.
+  With probe_paraphrase the fresh-session probe rewords the warm-up question (one
+  template per event, spanning cosine ~0.79-0.98 under MiniLM), so the cache similarity
+  threshold decides which events hit; an exact repeat scores 1.0 and hits at any threshold.
+  Every warm-up filler the victim also lost (a role revocation or offboarding takes more
+  than the target) gets its own fresh-session probe, tagged lost_docs/probe_doc, so the
+  analysis can measure the blast radius of each revocation type.
+  Options (all off by default):
+  warm_restricted: N  -- also warm up N restricted docs the victim may read (same project or
+                         group first), so role revocations can take more than the target.
+  probe_retained      -- after revocation, also ask about every warmed doc the victim still
+                         may read (same and fresh session): the collateral cost of purging.
+  launder             -- at t=0 the revoked victim pastes the old answer into a fresh
+                         session and asks again there; at every probe time a colleague without access asks the
+                         target question. User input carries no taint (assumption A1), so this
+                         is the case built to break provenance tracking.
 - existence (RQ3): twin worlds. Every target is probed by an attacker in a world that
   contains it and in an identical world without it. Labels are the world, so baseline
   and mitigated configurations share one ground truth.
@@ -25,7 +40,7 @@ import numpy as np
 
 from .attacker import make_probes
 from .clock import Clock, SimClock, make_clock
-from .corpus import Corpus, load_corpus
+from .corpus import Corpus, corpus_dir, load_corpus
 from .embedding import encode_cached, make_embedder
 from .instrumentation import RunLogger
 from .llm_client import LLMClient
@@ -38,6 +53,19 @@ PIPELINE_FIELDS = {f.name for f in fields(PipelineConfig)}
 
 DEFAULT_PROBE_TIMES = [0, 60, 600, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 129600, 172800]
 
+# Rewordings of the warm-up question, ordered from closest to farthest (median MiniLM cosine
+# against the original: 0.98, 0.97, 0.95, 0.95, 0.90, 0.83, 0.79). {q} is the question, {lq}
+# the same with a lower-case first letter.
+PARAPHRASES = (
+    "Could you tell me {lq}",
+    "Hey, {lq} Thanks!",
+    "Sorry, I forgot. {q} Can you remind me?",
+    "I'm putting together a report and need this. {q}",
+    "My manager is asking: {lq}",
+    "Drafting an email to finance about this one. {q} Need the exact number.",
+    "For the board deck next week, my manager needs to know {lq}",
+)
+
 
 @dataclass
 class Env:
@@ -48,8 +76,8 @@ class Env:
     reranker: object
 
     @classmethod
-    def build(cls, embedder: str, reranker: str, chunk_tokens: int = 300) -> "Env":
-        corpus = load_corpus(chunk_tokens=chunk_tokens)
+    def build(cls, embedder: str, reranker: str, chunk_tokens: int = 300, corpus: str = "synthetic") -> "Env":
+        corpus = load_corpus(corpus_dir(corpus), chunk_tokens=chunk_tokens)
         emb = make_embedder(embedder)
         vecs = encode_cached(emb, [c.text for c in corpus.chunks])
         return cls(corpus, emb, vecs, make_reranker(reranker))
@@ -117,10 +145,24 @@ def _revoke(pipe: RAGPipeline, kind: str, victim: str, target: dict) -> None:
         raise ValueError(f"unknown revocation type {kind!r}")
 
 
-def _fillers(corpus: Corpus, pipe: RAGPipeline, victim: str, target: dict, rng: random.Random, n: int) -> list[str]:
+def _restricted_fillers(corpus: Corpus, pipe: RAGPipeline, victim: str, target: dict, rng: random.Random,
+                        n: int) -> list[tuple[str, str]]:
+    """Restricted docs the victim may read, same project first, then sharing an ACL group."""
+    pool = [d for d in corpus.restricted([target["tenant_id"]])
+            if d["doc_id"] != target["doc_id"] and pipe.acm.has_access(victim, d["doc_id"])]
+    rng.shuffle(pool)
+    groups = set(target["acl_groups"])
+    pool.sort(key=lambda d: (d.get("project") != target.get("project") or target.get("project") is None,
+                             not groups & set(d["acl_groups"])))
+    return [(d["doc_id"], rng.choice(d["qa"])["question"]) for d in pool[:n]]
+
+
+def _fillers(corpus: Corpus, pipe: RAGPipeline, victim: str, target: dict, rng: random.Random,
+             n: int) -> list[tuple[str, str]]:
+    """(doc_id, question) pairs for authorized warm-up chatter around the target."""
     pool = [d for d in corpus.docs if d["tenant_id"] == target["tenant_id"] and d["doc_id"] != target["doc_id"]
             and d["sensitivity"] != "restricted" and pipe.acm.has_access(victim, d["doc_id"])]
-    return [rng.choice(d["qa"])["question"] for d in rng.sample(pool, min(n, len(pool)))]
+    return [(d["doc_id"], rng.choice(d["qa"])["question"]) for d in rng.sample(pool, min(n, len(pool)))]
 
 
 def run_revocation(pipe: RAGPipeline, client: Client, cell: dict, rng: random.Random, base: dict) -> None:
@@ -129,6 +171,10 @@ def run_revocation(pipe: RAGPipeline, client: Client, cell: dict, rng: random.Ra
     kind = cell.get("revocation_type", "single_doc")
     probe_times = sorted(float(t) for t in cell.get("probe_times", DEFAULT_PROBE_TIMES))
     n_fillers = int(cell.get("warm_fillers", 4))
+    paraphrase = bool(cell.get("probe_paraphrase", False))
+    n_restricted = int(cell.get("warm_restricted", 0))
+    probe_retained = bool(cell.get("probe_retained", False))
+    launder = bool(cell.get("launder", False))
     targets = corpus.restricted(cell.get("tenants"))
     clock = pipe.clock
     if not isinstance(clock, SimClock):
@@ -141,22 +187,55 @@ def run_revocation(pipe: RAGPipeline, client: Client, cell: dict, rng: random.Ra
         victim = rng.choice(sorted(pipe.acm.users_with_access(tid)))
         qa = target["qa"]
         fillers = _fillers(corpus, pipe, victim, target, rng, n_fillers)
+        if n_restricted:
+            # Own RNG so the main event stream (and pairing with other configs) is unchanged.
+            fillers += _restricted_fillers(corpus, pipe, victim, target,
+                                           random.Random(f"{base['seed']}-{ev}-restricted"), n_restricted)
+        colleague = None
+        if launder:
+            # Hardest case for the defense: the teammate without access to the target who shares
+            # the most of the victim's groups, so the rest of a cached answer's taint is theirs too.
+            outsiders = sorted(u["user_id"] for u in corpus.users_of(target["tenant_id"])
+                               if not pipe.acm.has_access(u["user_id"], tid))
+            mine = pipe.acm.groups_of(victim)
+            colleague = max(outsiders, key=lambda u: (len(pipe.acm.groups_of(u) & mine), u), default=None)
         gap = rng.uniform(0, 600)
         tags = {**base, "experiment": "revocation", "event": ev, "target": tid, "victim": victim,
                 "revocation_type": kind}
         session = f"ev{ev}-main"
 
         # Warm-up: authorized use that leaves copies in the cache, memory and summary.
-        client.ask(victim, session, qa[0]["question"], phase="warm", **tags)
-        for q in fillers:
-            client.ask(victim, session, q, phase="warm", **tags)
-        client.ask(victim, session, qa[1 % len(qa)]["question"], phase="warm", **tags)
+        first = client.ask(victim, session, qa[0]["question"], phase="warm", warm_doc=tid, **tags)
+        for d, q in fillers:
+            client.ask(victim, session, q, phase="warm", warm_doc=d, **tags)
+        client.ask(victim, session, qa[1 % len(qa)]["question"], phase="warm", warm_doc=tid, **tags)
 
         clock.advance(gap)
         t_rev = clock.now()
         _revoke(pipe, kind, victim, target)
+        tags["lost_docs"] = [d for d in (tid, *(f for f, _ in fillers)) if not pipe.acm.has_access(victim, d)]
+        lost_fillers = [(d, q) for d, q in fillers if d in tags["lost_docs"]]
+
+        def reword(q: str) -> str:
+            if not paraphrase:
+                return q
+            # Chosen by event index, not the RNG, so event sampling stays paired across cells.
+            tags["probe_template"] = ev % len(PARAPHRASES)
+            return PARAPHRASES[tags["probe_template"]].format(q=q, lq=q[0].lower() + q[1:])
 
         recall_q = f"Remind me what you told me earlier about {target['topic']} and its figures."
+        fresh_q = reword(qa[0]["question"])
+        lost_qs = [(d, reword(q)) for d, q in lost_fillers]
+        retained = [(d, corpus.doc(d)["topic"], q) for d, q in fillers if d not in tags["lost_docs"]]
+        if launder and colleague:
+            # The revoked victim pastes what they were told before into a fresh session, then asks.
+            # The pasted turn sits in memory with no taint, so the answer built from it (and the
+            # cache entry keyed by the plain question) carries no trace of the target.
+            client.ask(victim, f"ev{ev}-launder", f"For context, here are my notes from before: {first.text}",
+                       phase="launder", **tags)
+            client.ask(victim, f"ev{ev}-launder", "Please rewrite my notes above as a short email to my team.",
+                       phase="launder", **tags)
+            client.ask(victim, f"ev{ev}-launder", qa[0]["question"], phase="launder", launder_final=True, **tags)
         for t in probe_times:
             wait = t_rev + t - clock.now()
             if wait > 0:
@@ -164,7 +243,17 @@ def run_revocation(pipe: RAGPipeline, client: Client, cell: dict, rng: random.Ra
             has = pipe.acm.has_access(victim, tid)
             ptags = {**tags, "phase": "probe", "probe_t": t, "has_access": has}
             client.ask(victim, session, recall_q, probe_kind="same_session", **ptags)
-            client.ask(victim, f"ev{ev}-t{int(t)}", qa[0]["question"], probe_kind="new_session", **ptags)
+            client.ask(victim, f"ev{ev}-t{int(t)}", fresh_q, probe_kind="new_session", **ptags)
+            for d, q in lost_qs:
+                client.ask(victim, f"ev{ev}-t{int(t)}-{d}", q, probe_kind="lost_doc", probe_doc=d, **ptags)
+            if probe_retained:
+                for d, topic, q in retained:
+                    client.ask(victim, session, f"Remind me what you told me earlier about {topic} and its figures.",
+                               probe_kind="retained_same", probe_doc=d, **ptags)
+                    client.ask(victim, f"ev{ev}-t{int(t)}-{d}", q, probe_kind="retained_new", probe_doc=d, **ptags)
+            if launder and colleague:
+                client.ask(colleague, f"ev{ev}-t{int(t)}-colleague", fresh_q, probe_kind="colleague",
+                           probe_doc=tid, prober=colleague, **ptags)
 
 
 # ---- Twin-world existence inference (RQ3) ------------------------------------------
@@ -185,6 +274,8 @@ def run_existence(pipe: RAGPipeline, client: Client, cell: dict, rng: random.Ran
     for target in targets:
         tid, tenant = target["doc_id"], target["tenant_id"]
         publics = [d for d in corpus.docs if d["tenant_id"] == tenant and d["sensitivity"] == "public"]
+        # The Enron corpus has no public docs; its tenant-internal mail plays that role.
+        publics = publics or [d for d in corpus.docs if d["tenant_id"] == tenant and d["sensitivity"] != "restricted"]
         public_topic = rng.choice(publics)["topic"]
         probes = make_probes(target, public_topic)
         pipe.reset()

@@ -22,6 +22,12 @@ Query flow (each step gated by Mitigations, see mitigations.py):
     5. memory read (lazy taint check), LLM generation (or fast refusal)
     6. taint the response, write cache + memory
     7. quantize scores, pad latency to the configured shape
+
+Live authorization (live ACL check, lazy cache and memory checks) runs in-process here.
+iam_rpc_ms models it as a remote IAM service: one batched call per enforcement point
+per request, added to the simulated clock, counted in Truth.authz_calls.
+taint_user_input fingerprints the query against restricted secrets so pasted content
+is tainted too (closes the gap of assumption A1, see docs/TAINT_SOUNDNESS.md).
 """
 
 from __future__ import annotations
@@ -87,6 +93,8 @@ class Truth:
     stale_docs_used: list[str] = field(default_factory=list)      # index allowed, IAM denies
     live_denied_docs: list[str] = field(default_factory=list)     # caught by live_acl_check
     memory_turns: int = 0
+    authz_calls: int = 0                                           # simulated IAM round trips
+    query_taint: list[str] = field(default_factory=list)          # taint_user_input fingerprint
     response_taint: list[str] = field(default_factory=list)
     llm_called: bool = False
     llm_cached: bool = False
@@ -112,6 +120,7 @@ class PipelineConfig:
     summary_after: int = 8          # turns before rolling summary (0 = never)
     keep_recent: int = 4
     sync: str = "live"              # SyncPolicy spec, e.g. "periodic:3600", "event:0.05"
+    iam_rpc_ms: float = 0.0         # simulated latency of one batched IAM check
 
 
 class RAGPipeline:
@@ -127,6 +136,14 @@ class RAGPipeline:
         self.rng = random.Random(seed)
         self._qid = itertools.count(1)
         self._chunk_embeddings = chunk_embeddings
+        # Restricted secrets -> docs, for taint_user_input. Short values ("12") would taint
+        # half the corpus, so only distinctive strings count.
+        self._secret_docs: dict[str, set[str]] = {}
+        for d in corpus.docs:
+            if d["sensitivity"] == "restricted":
+                for v in corpus.secrets(d["doc_id"]):
+                    if len(v) >= 4:
+                        self._secret_docs.setdefault(v, set()).add(d["doc_id"])
         self.index: Optional[VectorIndex] = None
         self.reset()
 
@@ -170,7 +187,14 @@ class RAGPipeline:
             self._since_rev[user] = (last_rev, n)
             truth.t_since_revocation_s, truth.queries_since_revocation = t0 - last_rev, n
         q_emb = self.embedder.encode([query])[0]
+        q_taint = EMPTY
+        if m.taint_user_input:
+            q_taint = frozenset(doc for v, docs in self._secret_docs.items() if v in query for doc in docs
+                                if self.corpus.doc(doc)["tenant_id"] == tenant)
+            truth.query_taint = sorted(q_taint)
 
+        if m.cache_lazy_check:
+            self._authz(truth)
         hit = self.cache.get(q_emb, user, tenant)
         if hit is not None:
             entry, sim = hit
@@ -180,9 +204,9 @@ class RAGPipeline:
             text, taint = entry.response, entry.taint
             sources, conf, rr = list(entry.sources), entry.confidence, entry.rerank_confidence
         else:
-            text, taint, sources, conf, rr = self._generate(user, tenant, session, query, q_emb, truth)
+            text, taint, sources, conf, rr = self._generate(user, tenant, session, query, q_emb, truth, q_taint)
 
-        self.memory.append(session, user, "user", query, EMPTY)
+        self.memory.append(session, user, "user", query, q_taint)
         self.memory.append(session, user, "assistant", text, taint)
 
         truth.response_taint = sorted(taint)
@@ -200,7 +224,12 @@ class RAGPipeline:
             truth.pad_ms = extra * 1000.0
         return ApiResponse(text=text, sources=sources, confidence=conf, rerank_confidence=rr), truth
 
-    def _generate(self, user, tenant, session, query, q_emb, truth: Truth):
+    def _authz(self, truth: Truth) -> None:
+        truth.authz_calls += 1
+        if self.cfg.iam_rpc_ms > 0:
+            self.clock.sleep(self.cfg.iam_rpc_ms / 1000.0)
+
+    def _generate(self, user, tenant, session, query, q_emb, truth: Truth, q_taint=EMPTY):
         m, cfg = self.m, self.cfg
         cands = self.index.query(q_emb, cfg.top_k, user, tenant, prefilter=m.acl_prefilter)
         relevant = [c for c in cands if c.score >= cfg.min_relevance]
@@ -209,6 +238,8 @@ class RAGPipeline:
 
         authorized = [c for c in relevant if c.index_allows]
         if m.live_acl_check:
+            if authorized:
+                self._authz(truth)
             truth.live_denied_docs = sorted({c.doc_id for c in authorized if not self.acm.has_access(user, c.doc_id)})
             authorized = [c for c in authorized if self.acm.has_access(user, c.doc_id)]
 
@@ -225,6 +256,8 @@ class RAGPipeline:
 
         reason = "" if gen else ("access_denied" if relevant else "not_found")
         refusal = refusal_text(reason or "not_found", m.uniform_refusal)
+        if m.memory_lazy_check:
+            self._authz(truth)
         turns = self.memory.context(session, user)
         truth.memory_turns = len(turns)
 
@@ -239,7 +272,7 @@ class RAGPipeline:
             )
             truth.llm_called, truth.llm_cached, truth.llm_latency_ms = True, g.cached, g.latency_s * 1000.0
             text = g.text
-            taint = response_taint((c.doc_id for c in gen), (t.taint for t in turns), m.taint_transitive)
+            taint = response_taint((c.doc_id for c in gen), (t.taint for t in turns), m.taint_transitive) | q_taint
 
         refused = text.strip() == refusal.strip()
         truth.refused = refused

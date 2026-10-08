@@ -1,0 +1,21 @@
+# RQ5 (collateral) with a real generator: the stub recalls poorly from chat memory, so it
+# understates what the victim keeps. Same design as rq5_collateral (the first 8 events of
+# seeds 0-1 pair with it), Qwen2.5-7B, fewer probe times to bound the run.
+name: rq5_collateral_7b
+experiment: revocation
+seeds: 2
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  llm_backend: ollama
+  llm_model: qwen2.5:7b
+  sync: periodic:86400
+  events: 8
+  warm_restricted: 2
+  probe_retained: true
+  probe_times: [0, 3600, 86400]
+grid:
+  revocation_type: [single_doc, role]
+variants:
+  - {variant: baseline, preset: baseline}
+  - {variant: full, preset: full}
