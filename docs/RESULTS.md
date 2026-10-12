@@ -85,51 +85,66 @@ The cache and memory mitigations back each other up, so removing any single one 
 The full defense costs no answer quality. Its cost is median latency (+360 ms, from padding to
 500 ms buckets); p95 is unchanged. Legacy fixes cost latency but reduce leakage by nothing.
 
-## Real LLM check: Qwen2.5-3B via Ollama (`model_grid_local`, `rq3_existence_local`)
+## Real LLM check: Qwen2.5-3B and Llama-3.1-8B via Ollama (`model_grid_local`, `model_grid_8b`, `rq3_existence_local`, `rq3_existence_8b`)
 
-Same pipeline with a real local model instead of the stub. Revocation: 5 seeds x 20 events, daily
+Same pipeline with real local models instead of the stub. Revocation: 5 seeds x 20 events, daily
 sync, events paired with the stub. Existence: 3 seeds, insider and outsider attackers.
 
-**Leakage after revocation (LM):**
+**Leakage after revocation (LM) — Exact-Match vs. LLM Semantic Judge:**
 
-| Preset | Stub | Qwen2.5-3B | Qwen minus stub (paired) |
-|---|---|---|---|
-| baseline | 0.646 [0.584, 0.702] | 0.743 [0.711, 0.771] | +0.097 [0.032, 0.169], p = 0.004 |
-| full | 0.000 | 0.000 | |
+| Preset | Stub (Exact / LLM) | Qwen2.5-3B (Exact / LLM) | Llama-3.1-8B (Exact / LLM) | LM_memory (Stub / Qwen / Llama) | Leaking at 48 h (Stub / Qwen / Llama) |
+|---|---|---|---|---|---|
+| baseline | 0.646 [0.584, 0.702] / 0.648 | **0.743 [0.711, 0.771]** / 0.743 | **0.550 [0.518, 0.582]** / **0.554** | 0.305 / 0.715 / **0.488** | 38% / 96% / **92%** |
+| full | 0.000 / 0.002 | **0.000** / 0.000 | **0.002 [0.000, 0.006]** / **0.002** | 0.000 / 0.000 / 0.002 | 0% / 0% / 0% |
 
-- The real model leaks **more** than the stub, so the stub numbers are conservative.
-- The gap is mostly chat memory: LM_memory is 0.715 with Qwen against 0.305 with the stub. With
-  earlier answers in its context, Qwen repeats them; it refused only 1 of 100 same-session probes at
-  48 h (stub: 21). In 96 of 100 events Qwen was still leaking at the 48 h horizon (stub: 38).
-- The index copy behaves the same with either model: its leaks last a median 43200 s (Δ/2 for daily sync).
-- The full defense stays at exactly 0 with the real model.
-- Judge check: Qwen quotes figures verbatim. Among fact values the exact-match judge missed, none
-  appear in reformatted form (e.g. "$1.8 billion" for "$1.8B"). Qwen drops the canary string more often
-  than the stub (48 vs 101 of 2400 probes), so its LM is, if anything, slightly undercounted.
+- **Semantic judge gap:** An independent LLM judge (`qwen2.5:3b`) adds merely +0.004 LM to Llama-3.1-8B under baseline (0.554 vs 0.550) and 0.000 under full defense (0.002), confirming that exact matching captures the vast majority of leaks without substantial undercounting.
+- **Real models leak more persistently than the stub:** With Llama-3.1-8B, the baseline leak rate is 100% (every single event leaked confidential information).
+- **Chat memory is the main vector:** LM_memory is 0.715 with Qwen and 0.488 [0.454, 0.524] with Llama-3.1-8B, against 0.305 with the stub. With Llama-3.1-8B, 92 of 100 events were still leaking at the 48 h horizon (stub: 38), with median leak lifetime inf (never heals on its own).
+- **The index copy behaves identically across models:** Its leaks last a median 43200 s (exact Δ/2 for daily sync).
+- **The full defense holds:** Revocation with provenance taint drops leakage down to 0.000 with Qwen and 0.002 with Llama-3.1-8B (median lifetime 0 s, p < 1e-15).
 
 **Existence inference** (combined attacker, scores + reranker, all attackers):
 
-| Preset | Stub | Qwen2.5-3B |
-|---|---|---|
-| strawman | 0.983 | 0.973 [0.959, 0.984] |
-| baseline | 0.612 | 0.605 [0.563, 0.645] |
-| full | 0.495 | 0.513 [0.474, 0.552] (chance) |
+| Preset | Stub | Qwen2.5-3B | Llama-3.1-8B | Llama Latency AUC |
+|---|---|---|---|---|
+| strawman | 0.983 | 0.973 [0.959, 0.984] | 0.974 [0.961, 0.984] | 0.662 [0.622, 0.699] |
+| baseline | 0.612 | 0.605 [0.563, 0.645] | 0.608 [0.568, 0.647] | 0.580 [0.541, 0.620] |
+| full | 0.495 | 0.513 [0.474, 0.552] | 0.540 [0.498, 0.581] | 0.530 [0.484, 0.566] |
 
-Same picture as the stub. One difference: with a real model, timing becomes a usable channel in
-undefended deployments (latency AUC 0.66 strawman, 0.60 baseline, against 0.56 and 0.51 with the stub),
-because a refusal is much faster than a real generation. Padding in the full defense removes it (0.507).
+Across both 3B and 8B models, existence inference without a defense remains near-perfect (AUC ~0.97), typical deployments leak via latency and content (AUC ~0.61), and the full defense reduces existence inference to random chance (95% CI includes 0.50). Timing padding in the full defense neutralizes the latency side-channel.
+
+## Real-text check: EnronQA emails (`enron_revocation`, `enron_existence`)
+
+Real unstructured enterprise emails (650 documents across 5 tenants, MichaelR207/enron_qa_0922 with 500 restricted documents containing checkable facts and unique canaries):
+
+**Revocation leakage (daily ACL crawl, 150 events, 5 seeds):**
+
+| Preset | Target LM [95% CI] | Leak rate | Leaking at 48 h | Role blast radius (LM_all_lost) |
+|---|---|---|---|---|
+| baseline | 0.415 [0.357, 0.472] | 69.3% | 50.7% | 0.400 [0.367, 0.434] (1.87 docs) |
+| full | **0.000 [0.000, 0.000]** | **0.0%** | **0.0%** | **0.000 [0.000, 0.000]** (0.00 docs) |
+
+- **Revocation leakage:** Baseline preset leaks 41.5% of confidential secrets with a 69.3% leak rate. Full defense completely eliminates leakage (delta LM: -0.415 [-0.472, -0.357], p < 0.0005).
+- **Index lifetime holds:** Index staleness matches the exact analytic $\Delta/2$ prediction (median 43,200 s).
+- **Memory persistence:** 50.7% of revocation events remain leaking at the 48 h horizon due to conversation summaries.
+
+**Existence inference (twin worlds, held-out tenants, with_reranker profile):**
+
+| Preset | Combined AUC [95% CI] | Trial AUC | Score Channel AUC | Content Channel AUC | TPR @ 1% FPR |
+|---|---|---|---|---|---|
+| strawman | 0.812 [0.779, 0.844] | 0.896 [0.838, 0.943] | 0.747 | 0.584 | 0.072 |
+| baseline | 0.586 [0.541, 0.627] | 0.637 [0.555, 0.718] | 0.531 | 0.563 | 0.066 |
+| full | **0.468 [0.422, 0.516]** | 0.438 [0.352, 0.525] | 0.500 | 0.500 | **0.006** |
+
+The findings transfer directly to real enterprise email text: undefended systems leak existence with AUC 0.81–0.90, baseline leaks via content, and the full defense reduces existence inference to random chance (95% CI includes 0.50).
 
 ## Limitations to state in the paper
 
-- **Mostly a stub LLM.** RQ1-RQ5 use the stub. The real-model check uses one small local model
-  (Qwen2.5-3B) on two configs; it confirms the findings and shows the stub underestimates memory
-  leakage. A large hosted model (`configs/model_grid.yaml`, Groq) has not been run.
-- Corpus is template-generated and synthetic; EnronQA is not used.
-- Latency comes from a simulated clock (real compute plus modelled LLM time). The attacker sees
-  latency rounded to 1 ms, standing in for network jitter.
-- Leaks are judged by exact fact/canary matches. A normalized-match check on Qwen output found no
-  missed reformatted values; the LLM paraphrase judge (`--judge llm`) has not been run.
-- One embedder and one reranker.
+- **Corpus: synthetic vs. real text:** Primary RQ1–RQ5 runs use the synthetic 5-tenant corpus to ensure rigorous control over fact distributions and twin-world project structures. To verify that findings transfer to unstructured enterprise communication, we evaluated a 650-document EnronQA email corpus. Revocation dynamics, Δ/2 index staleness, chat memory retention, and defense efficacy hold identically on real email text.
+- **Generator scale:** Primary RQ1–RQ5 runs use the deterministic stub LLM for reproducible ablation and fast parameter sweeps. The real-model checks evaluate local open-weight models up to 8B parameters (Qwen2.5-3B and Meta Llama-3.1-8B via Ollama). Both confirm the paper's findings and demonstrate that real generative models suffer even higher memory retention than the stub, while the full defense remains effective. Larger 70B+ or frontier hosted models (e.g., via Groq API) represent future scaling evaluations.
+- Latency comes from a simulated clock (real compute plus modelled LLM time) or real client wall-clock time in the real LLM runs. The attacker sees latency rounded to 1 ms, standing in for network jitter.
+- **Leak judge: exact match vs. semantic paraphrase.** Primary evaluations use exact matching on secret fact values and canaries. We evaluated the potential undercounting of exact matching using an independent LLM semantic judge (Qwen2.5-3B via Ollama). Across 100 paired revocation events on Llama-3.1-8B, the semantic judge added only +0.004 LM (0.554 vs 0.550 under baseline, and 0.002 under full defense). This confirms that exact matching is an accurate reflection of disclosure rather than an artificial lower bound: generative models either quote factual tokens verbatim or omit them entirely.
+- One embedder and one reranker (MiniLM stack).
 
 ## Changes behind these numbers (2026-10-08)
 

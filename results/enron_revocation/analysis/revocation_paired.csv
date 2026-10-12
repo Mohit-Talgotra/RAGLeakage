@@ -1,0 +1,4 @@
+cell,vs,delta_LM,CI_cluster,p,p_wilcoxon,pairs
+"preset=baseline,revocation_type=role","preset=baseline,revocation_type=single_doc","0.000 [0.000, 0.000]","[0.000, 0.000]",1.0000,1.0000,150
+"preset=full,revocation_type=single_doc","preset=baseline,revocation_type=single_doc","-0.415 [-0.472, -0.357]","[-0.515, -0.328]",<0.0005,4.6e-19,150
+"preset=full,revocation_type=role","preset=baseline,revocation_type=single_doc","-0.415 [-0.472, -0.357]","[-0.515, -0.328]",<0.0005,4.6e-19,150

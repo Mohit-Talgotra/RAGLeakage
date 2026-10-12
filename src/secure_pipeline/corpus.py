@@ -59,8 +59,17 @@ class Corpus:
         return out
 
 
-def corpus_dir(name: str = "synthetic") -> Path:
-    """synthetic: data/ (generate_corpus.py); enron: data/enron/ (build_enron_corpus.py)."""
+def corpus_dir(name: str | Path = "synthetic") -> Path:
+    """Resolve data directory from name or path."""
+    if isinstance(name, Path):
+        return name
+    if name in ("synthetic", "data"):
+        return DATA_DIR
+    p = Path(name)
+    if p.is_dir():
+        return p
+    if (DATA_DIR.parent / p).is_dir():
+        return DATA_DIR.parent / p
     return DATA_DIR if name == "synthetic" else DATA_DIR / name
 
 

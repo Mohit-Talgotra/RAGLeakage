@@ -572,7 +572,8 @@ def main() -> None:
     manifest, cells, by_cell = load(args.run_dir)
     out = args.run_dir / "analysis"
     out.mkdir(exist_ok=True)
-    corpus = load_corpus(corpus_dir(cells[0].get("corpus", "synthetic")) if cells else corpus_dir())
+    target = cells[0].get("data_dir", cells[0].get("corpus", "synthetic")) if cells else "synthetic"
+    corpus = load_corpus(corpus_dir(target))
     kind = manifest["experiment"]
     if kind == "revocation":
         text = analyze_revocation(manifest, cells, by_cell, corpus, out, args.reference, judge)

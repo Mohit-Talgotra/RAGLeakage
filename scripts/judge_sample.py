@@ -52,7 +52,8 @@ def main() -> None:
     rows, summary = [], []
     for run_dir in args.run_dirs:
         manifest, cells, by_cell = load(run_dir)
-        corpus = load_corpus(corpus_dir(cells[0].get("corpus", "synthetic")))
+        corpus_ref = cells[0].get("data_dir", cells[0].get("corpus", "synthetic")) if cells else "synthetic"
+        corpus = load_corpus(corpus_dir(corpus_ref))
         for cell in cells:
             probes = [r for r in by_cell[cell["cell_id"]] if r["tags"].get("phase") == "probe"
                       and r["tags"].get("probe_kind") in ("same_session", "new_session")]

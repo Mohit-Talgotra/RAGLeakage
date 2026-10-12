@@ -106,9 +106,10 @@ def main() -> None:
     total = len(cells) * len(seeds)
     done = 0
     for cell in cells:
+        corpus_ref = cell.get("data_dir", cell.get("corpus", "synthetic"))
         key = (cell.get("embedder", "all-MiniLM-L6-v2"),
                cell.get("reranker", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
-               int(cell.get("chunk_tokens", 300)), cell.get("corpus", "synthetic"))
+               int(cell.get("chunk_tokens", 300)), corpus_ref)
         if key not in envs:
             print(f"[run] loading embedder={key[0]} reranker={key[1]}", flush=True)
             envs[key] = Env.build(*key)

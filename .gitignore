@@ -10,6 +10,7 @@ data/enron/
 release/
 .DS_Store
 paper_package*
+*.zip
 
 # Raw per-query logs (~1.5 GB) go to Zenodo, not git; keep analysis/ + manifest.json.
 results/*/runs/
