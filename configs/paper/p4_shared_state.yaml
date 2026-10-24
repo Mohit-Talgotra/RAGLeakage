@@ -1,0 +1,24 @@
+# New disclosure through shared state (re-audit N3). After revocation a colleague who still holds
+# the target asks about facts the victim never saw; that answer enters the cache, and the victim's
+# reworded probe_unseen question can reach it. Expected: baseline_shared leaks new secrets, full
+# blocks them with the lazy check, per-user caches never see them.
+name: p4_shared_state
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  sync: periodic:86400
+  events: 40
+  probe_readonly: true
+  probe_unseen: true
+  colleague_unseen: true
+  probe_paraphrase: file
+  probe_times: [0, 600, 3600, 14400, 43200, 86400, 172800]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  summarizer: llm
+grid:
+  preset: [baseline, baseline_shared, epoch, full, full_user]
+  revocation_type: [single_doc, mover]

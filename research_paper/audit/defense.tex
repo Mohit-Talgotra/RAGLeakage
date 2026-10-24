@@ -1,0 +1,61 @@
+\section{Provenance-Tainted Revocation}
+\label{sec:defense}
+
+\paragraph{Idea.}
+Every derived artifact carries a \emph{taint}, the set of source documents whose content it may contain. An artifact may be served to a user only if the user currently holds every document in its taint. Because the check refers to the identity system at read time, it does not depend on whether a revocation event reached the artifact.
+
+\paragraph{Taint propagation.}
+Let $T(a)\subseteq\mathcal{D}$ be the taint of artifact $a$. A cache entry has the taint of the context units used to generate its answer. An answer has the union of the taints of the chunks and the memory items placed in its context. A rolling summary has the union of the taints of the turns it condenses:
+\begin{equation}
+T(\mathrm{summary}) = \bigcup_{t\in\mathrm{turns}} T(t), \qquad
+T(\mathrm{answer}) = \bigcup_{c\in\mathrm{context}} T(c).
+\end{equation}
+The second equation is what makes the taint transitive through memory: an answer built from an earlier answer about document $d$ inherits $d$.
+
+\paragraph{Enforcement.}
+Revocation is enforced in two ways. \emph{Eagerly}, when a revocation event fires, tainted cache entries are evicted and tainted memory items and summaries are purged. \emph{Lazily}, on every read, artifact $a$ is served to user $u$ at time $t$ only if
+\begin{equation}
+\forall d\in T(a):\; \mathrm{IAM}(u,d,t)=\text{allow}.
+\label{eq:lazy}
+\end{equation}
+Retrieval also re-checks IAM live instead of trusting the ACL copy in the index, and filters before scoring (ACL pre-filter) so that unauthorized candidates never influence scores or generation; this is the query-integration discipline of B\"uttcher and Clarke~\cite{buttcher2005security} applied to a RAG pipeline.
+
+\paragraph{Constant-shape responses.}
+To close the existence channels, responses expose relevance scores only in coarse bands, use one refusal text for every refusal reason, and pad latency up to the next multiple of a fixed bucket (500\,ms). The padding is applied after all computation, so the observed latency depends on the bucket and not on which path produced the response.
+
+\subsection{Security argument and assumptions}
+\label{sec:soundness}
+Zero leakage under the defense would follow by construction if the taint were always complete. This subsection states the invariant the defense relies on, why the implementation maintains it, and where it stops holding.
+
+\paragraph{Invariant.} For every derived artifact $a$ (cache entry, memory turn or rolling summary), if content of a restricted document $d$ reached $a$, then $d\in T(a)$.
+
+\paragraph{Why the invariant holds.} Content enters an artifact only through a generation step, whose inputs are the retrieved chunks passed to the generator, the memory turns placed in the prompt, and the user's query. The response taint is the union of the documents in the first input and, in transitive mode, the taints of the turns in the second. Cache writes and memory writes store that taint unchanged, a cache hit re-serves an entry together with its stored taint, and a summary's taint is the union of the turns it replaces. By induction over the sequence of writes, every artifact's taint covers every document that reached it through retrieval or memory, however many times the content was copied, paraphrased or summarized: the taint follows data flow, not wording. With the invariant, the lazy check in~\eqref{eq:lazy} prevents any artifact derived from a revoked document from reaching the revoked user, and the live ACL check covers the index. The lazy check is complete mediation~\cite{saltzer1975protection} applied to derived artifacts. A randomized unit test runs sessions with frequent summarization and checks that no artifact holds a secret unique to a restricted document without that document in its taint; it also confirms that non-transitive taint violates the invariant.
+
+\paragraph{Assumptions.}
+\begin{itemize}
+\item[A1] \emph{User input is untainted.} If a user pastes restricted content into a query, the response and the memory turn built from it do not carry the source document. An optional switch fingerprints queries against the secrets of restricted documents and taints a query that contains one verbatim. A user who rewrites the content in their own words is outside any content-agnostic tracking; this is the declassification limit of information-flow control~\cite{myers1997decentralized,sabelfeld2003language}, since a principal who legitimately read data can always re-type it.
+\item[A2] \emph{No untracked inputs.} The prompt has no inputs other than retrieval, memory and the query. Tool output, web search or plug-ins would have to label their output in the same way.
+\item[A3] \emph{Document ACLs are correct.} If a document copies figures from a restricted document but carries a broader ACL, it legitimately serves them. This is a data-governance error that no artifact-level mechanism can detect.
+\item[A4] \emph{Consistent authorization reads.} The live and lazy checks read IAM state at least as new as the revocation. A check evaluated against a lagging replica reintroduces the ``new enemy'' problem~\cite{pang2019zanzibar} for the length of the lag.
+\end{itemize}
+\Cref{sec:method-review} describes the experiments built to break the invariant: paste-back laundering by the revoked user, which tests A1, and paraphrase across sessions with real models, judged by an LLM judge.
+
+\paragraph{Presets compared.}
+\Cref{tab:presets} defines the four deployments evaluated. \texttt{strawman} is a deliberately leaky reference. \texttt{baseline} is a plausible production configuration. \texttt{legacy} is an earlier mitigated design that purges memory by document identifier, which cannot match a summary. \texttt{full} is the defense described above.
+
+\begin{table*}[tbp]
+\centering
+\caption{Deployment presets. ``Stale ACL'' means the index ACL copy is trusted between syncs.}
+\label{tab:presets}
+\small
+\begin{tabular}{@{}p{1.6cm}p{3.1cm}p{2.8cm}p{2.8cm}p{3.3cm}@{}}
+\toprule
+Preset & Retrieval & Cache & Memory & Response metadata \\
+\midrule
+strawman & flat across tenants, post-filter & global, no revocation hook & no purge & raw scores, distinct refusals, no padding \\
+baseline & ACL pre-filter, stale ACL copy & tenant-scoped, no hook & no purge & raw \\
+legacy & pre-filter & evict on revoke & purge by document ID & score bands, uniform refusal, 30\,ms floor, fast refusal path \\
+full & pre-filter, live IAM check & evict, plus lazy taint check & transitive taint purge, lazy check & score bands, uniform refusal, 500\,ms bucket padding \\
+\bottomrule
+\end{tabular}
+\end{table*}

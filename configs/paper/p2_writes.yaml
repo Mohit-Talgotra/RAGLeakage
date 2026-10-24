@@ -1,0 +1,19 @@
+# How much does re-caching leaked answers extend a leak, in a deployment where every query
+# writes the cache and memory (probe_readonly: false), against read-only measurement?
+name: p2_writes
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  preset: baseline
+  sync: periodic:86400
+  events: 40
+  probe_paraphrase: file
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  summarizer: llm
+grid:
+  probe_readonly: [true, false]
+  cache_ttl_s: [3600, 86400]

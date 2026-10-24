@@ -1,0 +1,185 @@
+\section{Results}
+\label{sec:results}
+
+Unless stated otherwise, results are for Llama-3.1-8B with model-written summaries; brackets are 95\%
+intervals clustered by target document. Every red value is filled from the configuration named in
+\cref{tab:grid} (see \texttt{RESULTS\_TODO.md}).
+
+\subsection{RQ1: Which artifacts leak, and is it new to the user?}
+\label{sec:rq1}
+
+\begin{table*}[t]
+\centering
+\caption{Post-revocation leakage when one derived artifact is re-opened from the full defense (daily
+crawl, 200 events per cell). $\LM^{\text{new}}$: secrets the victim was never shown;
+$\LM^{\text{re}}$: re-disclosure; $\LM_{\ge 1\text{h}}$: from probes at least one hour after
+revocation.}
+\label{tab:rq1}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llccccc@{}}
+\toprule
+Corpus & Re-opened artifact & $\LM$ & $\LM^{\text{new}}$ & $\LM^{\text{re}}$ & $\LM_{\ge 1\text{h}}$ & Median lifetime \\
+\midrule
+G & none (full) & \pending{} & \pending{} & \pending{} & \pending{} & -- \\
+G & index (stale ACL) & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+G & cache & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+G & memory (single / role / mover) & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+\midrule
+E & index / cache / memory & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Observation.}
+For the cache and memory rows, $\LM^{\text{new}}$ is zero by construction (they hold only what the
+victim was shown), so their case rests on re-disclosure and on shared state (\cref{sec:rq4}).
+\pending{R1: per-artifact LM and LM\_new; share of leakage that is re-disclosure; canary-only leak
+rate as a judge-free check; blast radius by revocation type (mover vs role); share of secrets that
+survive into model-written summaries.}
+
+\paragraph{Interpretation.}
+\pending{Whether each artifact leaks on its own (the independent-copies thesis) once re-disclosure is
+separated out. Pilot runs (\cref{app:pilot}) found re-disclosure to be most of the stub's leakage
+(0.527 of 0.585) but under half of Qwen2.5-3B's (0.336 of 0.694): real models answer ``remind me''
+questions with facts the user never asked about.}
+
+\subsection{RQ2: How long does leakage last?}
+\label{sec:rq2}
+
+\paragraph{Propagation, retention and the revocation gap.}
+\pending{R2a: index lifetime by sync policy (with the $\Delta/2$ check moved to
+\cref{app:validation}); the long tail from lost webhooks; memory lifetime as a function of session
+retention (none / 1\,h / 24\,h); $\LM$ and $\LM_{\ge1\text{h}}$ as a function of the revocation gap.}
+
+\paragraph{Measurement that writes.}
+\pending{R2w (p2\_writes): how much re-caching of leaked answers extends the leak in a deployment where
+every query writes the cache and memory, against read-only probes.}
+
+\paragraph{Cache threshold and TTL.}
+\pending{R2b: LM by threshold with natural rewordings (a smooth curve rather than the step function of
+seven templates); TTL sets duration, not amount.}
+
+\subsection{RQ3: What can an API client infer about hidden documents?}
+\label{sec:rq3}
+
+\begin{table*}[t]
+\centering
+\caption{Existence inference (combined attacker, with-reranker profile, held-out tenants with unseen
+templates), insiders and outsiders separately. Cells marked \textsuperscript{s} are structural: the
+pre-filter hides the target in both worlds, so only shared state can differ.}
+\label{tab:rq3}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Preset & Insider AUC & Outsider AUC & Insider TPR@1\%FPR & Strongest channel \\
+\midrule
+strawman & \pending{} & \pending{} & \pending{} & \pending{} \\
+baseline & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+baseline\_shared & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+legacy & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+epoch & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+full & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Observation.}
+\pending{R3: AUC per preset, insider vs outsider, per channel; Enron alongside; sibling vs singleton
+targets.} In the pilot runs the old baseline, whose cache was shared across the tenant, reached AUC
+0.714 [0.664, 0.765] for insiders and 0.512 [0.490, 0.532] for outsiders: almost all of its signal
+was restricted answers served to insiders from the shared cache (\cref{app:pilot}). That is an
+authorization failure rather than a side channel, which is why \texttt{baseline} now scopes the cache
+per user and the shared cache is measured as its own preset.
+
+\paragraph{Timing with real models.}
+\pending{R3t: latency channel per preset with per-call measured latency; residual of bucket padding
+(share of responses per bucket per world, AUC of the bucket index alone).}
+
+\subsection{RQ4: What closes each channel?}
+\label{sec:rq4}
+
+\paragraph{Ablation.}
+\pending{R4a: leave-one-out from full; LM without transitive taint, and with the one-hop variant
+(summaries carry their turns' documents, answers do not inherit memory taint), which separates the
+summary half of transitivity from the answer half.} An identifier-based purge (\texttt{legacy})
+cannot reach a summary, but the pilot comparison of \texttt{legacy} with \texttt{baseline} cannot show
+it: both keep the stale index, which dominates total leakage, and \texttt{legacy} does reduce memory
+leakage (0.322 to 0.230 in the pilot). The ablation with the live ACL check in place is the clean
+test.
+
+\paragraph{Inference side.}
+\pending{R4b: with the pre-filter off and scores computed only over authorized chunks, the residual
+post-filter channels (fewer sources returned, rank displacement, latency); the same cell with
+withheld scores exposed, as a named misconfiguration; fast-refusal effect without padding.}
+
+\paragraph{Defenses compared.}
+\label{sec:res-baselines}
+
+\begin{table*}[t]
+\centering
+\caption{Defenses compared on the same paired events (single-document revocation, daily crawl). Left:
+leakage. Middle: what the victim keeps of documents it still holds, in the session where the
+revocation happened (short warm-up and long session). Right: existence inference and authorization
+load. Rows with sentence-level taint are reported for model-written and for extractive summaries;
+with model-written summaries \texttt{full\_fine} equals \texttt{full}.}
+\label{tab:defenses}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+Preset & $\LM$ & $\LM^{\text{new}}$ & Retained recall (short) & Retained recall (long) & Refusals (long) & Insider AUC & Decisions/query \\
+\midrule
+baseline & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & 0 \\
+baseline\_shared & \pending{} & \pending{} & \pending{} & -- & -- & \pending{} & 0 \\
+authz\_prefilter & \pending{} & \pending{} & \pending{} & -- & -- & \pending{} & \pending{} \\
+authz\_postfilter & \pending{} & \pending{} & \pending{} & -- & -- & \pending{} & \pending{} \\
+epoch & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+flush & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+full & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+full\_user & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+full\_fine & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Shared state, lost hooks, reclassification.}
+\pending{R4s (p4\_shared\_state): LM\_new through a colleague's cache entries, baseline\_shared vs
+full vs per-user caches. R4l (p4\_lossy\_hooks): LM for flush vs epoch, full and full\_user when 5\%
+of hooks are lost. R4r (p4\_reclassify): leakage per preset and bystander recall and refusals; epoch
+and flush discard every affected user's sessions.}
+
+\pending{R4c: the published retrieval-time designs remove index leakage and leave cache and memory
+leakage; epoch, flush and taint all reach zero; the utility columns decide between them. State the
+result whichever way it goes: if epoch invalidation keeps as much retained recall as taint, the
+simpler mechanism is the recommendation.}
+
+\subsection{RQ5: What does the defense cost?}
+\label{sec:rq5}
+\pending{R5: overhead during normal use per preset: correctness, latency with and without padding,
+cache hit rate (full vs full\_user); IAM calls and per-document decisions per query at 0 and 10\,ms round trip; taint-set size
+distribution in long sessions.}
+
+\subsection{Robustness}
+\label{sec:res-review}
+
+\paragraph{Post-revocation updates.}
+\label{sec:res-update}
+\pending{R6: $\LM^{\text{upd}}$ per preset.}
+
+\paragraph{Paste-back laundering.}
+\label{sec:res-launder}
+\pending{R7: victim success rate, colleague event rate and colleague LM, fingerprinting off/on, for
+full, full\_user and epoch, Llama-3.1-8B and Qwen2.5-32B (200 events per cell); set against the
+cache hit rate of full vs full\_user from R5.}
+
+\paragraph{Model scale.}
+\label{sec:real}
+\pending{R8: baseline LM, LM\_new, memory lifetime and full-defense LM per model, 3B to 70B and
+GPT-4o-mini.}
+
+\paragraph{Paraphrase judge.}
+\label{sec:res-judge}
+\pending{R9: model judge precision and recall on the hand-labelled sample; extra leakage it finds per
+cell.}

@@ -1,0 +1,19 @@
+\section{Data}
+\label{sec:data}
+
+\paragraph{Corpus.}
+The corpus is synthetic and generated from templates with a fixed seed (20261006). It has five tenants with 100 documents each: 40 public, 30 internal and 30 restricted. Each tenant has eight users (six employees, two contractors) and department groups. Every document carries checkable facts (numbers, names, dates). Every restricted document also carries a unique random canary string, in the sense of Carlini et al.~\cite{carlini2019secret}, which cannot be guessed or found in any other document. Each document is one chunk.
+
+Restricted documents come in projects of one or two related documents. Removing one document in the twin world therefore still leaves related material in the collection, which makes the negative class of the existence task hard: related topics remain retrievable.
+
+\paragraph{Why synthetic.}
+Synthetic data provides ground truth for what counts as a secret and allows exact, automatic judging of leakage. It also removes any real confidential content, and no human participants or personal data are involved. The cost is that the documents are more regular than real enterprise text; we return to this in \cref{sec:limits}.
+
+\paragraph{Retrieval stack.}
+Embeddings come from a MiniLM sentence encoder (\texttt{all-MiniLM-L6-v2};~\cite{reimers2019sbert,wang2020minilm}), reranking from a MiniLM cross-encoder (\texttt{ms-marco-MiniLM-L-6-v2}), and storage from a ChromaDB index. Retrieval takes the top 5 chunks and passes 3 to the generator, with a minimum cosine relevance of 0.25. The semantic cache uses a similarity threshold of 0.90 and a TTL of 3600\,s unless varied. Chat memory writes a rolling summary after 8 turns and keeps the 4 most recent turns.
+
+\paragraph{Generators.}
+Experiments RQ1--RQ5 use a deterministic stub generator that answers extractively from the best-matching context unit (a document chunk or an earlier answer) and simulates LLM latency. The real-model check uses Qwen2.5-3B-Instruct served locally with Ollama at temperature 0, with measured latency. The two are always reported separately.
+
+\paragraph{Clock.}
+A simulated clock adds virtual waits (LLM time, latency padding, and the hours between probes) to real compute time, so that one run covers 48\,h after revocation.

@@ -1,0 +1,17 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\caption{Existence-inference AUC per observable channel (with-reranker profile).}
+\label{tab:rq3chan}
+\begin{tabular}{lcccccc}
+\toprule
+Preset & Score & Reranker & Latency & Refusal & Content & Combined \\
+\midrule
+strawman & 0.883 & 0.983 & 0.555 & 0.576 & 0.706 & 0.983 \\
+baseline & 0.530 & 0.536 & 0.513 & 0.525 & 0.615 & 0.612 \\
+legacy & 0.529 & 0.513 & 0.505 & 0.523 & 0.602 & 0.592 \\
+full & 0.500 & 0.500 & 0.499 & 0.500 & 0.500 & 0.495 \\
+\bottomrule
+\end{tabular}
+\end{table}

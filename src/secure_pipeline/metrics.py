@@ -10,10 +10,12 @@ metrics.py -- Leakage, survival, inference and utility metrics with bootstrap CI
 - Utility: Recall@k, nDCG@k, answer correctness, over-refusal, latency percentiles,
       cache hit rate.
 
-Confidence intervals are percentile bootstraps over the unit of analysis
-(revocation events, probes, queries). Paired comparisons resample matched pairs; they also
-report a two-stage (seed, then event) clustered CI and a Wilcoxon signed-rank p-value,
-because a 2000-resample bootstrap p cannot resolve anything below 0.0005.
+Confidence intervals are percentile bootstraps. Events that share a target document, and
+probes that share a target, are not independent (the same documents recur across events and
+seeds), so the primary intervals resample target documents as clusters (cluster_ci,
+auc_ci_cluster; for AUC this is the clustered-ROC setting of Obuchowski 1997). Paired
+comparisons report a target-clustered CI, a Wilcoxon signed-rank p on per-target mean
+differences, and a Holm-adjusted p across the family of comparisons in one analysis.
 """
 
 from __future__ import annotations
@@ -67,6 +69,35 @@ def cluster_bootstrap_ci(values: Sequence[float], groups: Sequence, n: int = 200
     return float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
 
 
+def cluster_ci(values: Sequence[float], groups: Sequence, n: int = 2000, seed: int = 0) -> tuple[float, float, float]:
+    """(mean, lo, hi): resample whole clusters (e.g. target documents) with replacement."""
+    v = np.asarray(values, float)
+    if len(v) == 0:
+        return (math.nan, math.nan, math.nan)
+    by: dict = {}
+    for x, g in zip(v, groups):
+        by.setdefault(g, []).append(x)
+    sums = np.array([sum(xs) for xs in by.values()])
+    counts = np.array([len(xs) for xs in by.values()])
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(sums), size=(n, len(sums)))
+    boots = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
+    return float(v.mean()), float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
+
+
+def holm(pvalues: Sequence[float]) -> list[float]:
+    """Holm-Bonferroni adjusted p-values (Holm 1979), in the input order."""
+    p = np.asarray(pvalues, float)
+    order = np.argsort(p)
+    m = len(p)
+    adj = np.empty(m)
+    running = 0.0
+    for rank, i in enumerate(order):
+        running = max(running, min(1.0, (m - rank) * p[i]))
+        adj[i] = running
+    return [float(x) for x in adj]
+
+
 def paired_test(a: Sequence[float], b: Sequence[float], groups: Sequence) -> dict:
     """paired_bootstrap plus a seed-clustered CI and an exact-style Wilcoxon signed-rank p (tied events with a zero difference are dropped, as in Wilcoxon 1945).
 
@@ -76,8 +107,14 @@ def paired_test(a: Sequence[float], b: Sequence[float], groups: Sequence) -> dic
     if res["n"] == 0:
         return {**res, "lo_cluster": math.nan, "hi_cluster": math.nan, "p_wilcoxon": math.nan}
     d = np.asarray(a, float) - np.asarray(b, float)
-    res["lo_cluster"], res["hi_cluster"] = cluster_bootstrap_ci(d, groups)
-    res["p_wilcoxon"] = 1.0 if not d.any() else float(wilcoxon(d, zero_method="wilcox").pvalue)
+    _, res["lo_cluster"], res["hi_cluster"] = cluster_ci(d, groups)
+    # One difference per cluster, so the test does not count repeated targets as independent.
+    by: dict = {}
+    for x, g in zip(d, groups):
+        by.setdefault(g, []).append(x)
+    per = np.array([np.mean(xs) for xs in by.values()])
+    res["p_wilcoxon"] = 1.0 if not per.any() else float(wilcoxon(per, zero_method="wilcox").pvalue)
+    res["clusters"] = len(per)
     return res
 
 
@@ -172,6 +209,26 @@ def fast_auc(labels: np.ndarray, scores: np.ndarray) -> float:
         return math.nan
     ranks = rankdata(scores)
     return float((ranks[labels].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
+
+
+def auc_ci_cluster(labels, scores, groups, n: int = 1000, seed: int = 0) -> tuple[float, float, float]:
+    """AUC with a bootstrap CI that resamples clusters (targets): every probe of a drawn target,
+    in both worlds, enters the resample together."""
+    labels, scores = np.asarray(labels), np.asarray(scores)
+    if len(set(labels)) < 2:
+        return (math.nan, math.nan, math.nan)
+    by: dict = {}
+    for i, g in enumerate(groups):
+        by.setdefault(g, []).append(i)
+    clusters = [np.asarray(ix) for ix in by.values()]
+    rng = np.random.default_rng(seed)
+    boots = []
+    for _ in range(n):
+        ix = np.concatenate([clusters[j] for j in rng.integers(0, len(clusters), len(clusters))])
+        b = fast_auc(labels[ix], scores[ix])
+        if not math.isnan(b):
+            boots.append(b)
+    return fast_auc(labels, scores), float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
 
 
 def auc_ci(labels, scores, n: int = 1000, seed: int = 0) -> tuple[float, float, float]:

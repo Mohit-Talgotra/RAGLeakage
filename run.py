@@ -23,9 +23,13 @@ Config format:
       - {variant: fast_refusal, fast_refusal: true}
 
 Cell keys can be: any Mitigations field, any PipelineConfig field, preset, open_surface,
-ablate, embedder, reranker, llm_backend, llm_model, clock, exposure, and experiment
-parameters (events, revocation_type, probe_times, warm_fillers, tenants,
-targets_per_tenant, attackers, victim_warmup, queries).
+ablate, embedder, reranker, llm_backend, llm_model, llm_cache, stub_sentences, clock, exposure,
+corpus, and experiment parameters (events, revocation_type, probe_times, warm_fillers, tenants,
+targets_per_tenant, attackers, victim_warmup, queries, session_turns, revoke_gap_s,
+probe_readonly, probe_unseen, update_after_revoke, probe_paraphrase).
+
+corpus: synthetic_v3@seed gives every seed its own generated corpus (synthetic_v3_s<seed>),
+so seeds are independent replicates rather than re-draws of events from one corpus.
 
 Output: <out>/<name>/manifest.json and <out>/<name>/runs/<cell_id>_s<seed>.jsonl.
 Finished runs are skipped on re-invocation unless --force is given.
@@ -86,6 +90,8 @@ def main() -> None:
     ap.add_argument("--seed-offset", type=int, default=0)
     ap.add_argument("--out", type=Path, default=ROOT / "results")
     ap.add_argument("--force", action="store_true", help="rerun cells that already have output")
+    ap.add_argument("--only", action="append", default=[], metavar="KEY=VALUE",
+                    help="run only cells with this field value (repeatable); the manifest keeps every cell")
     args = ap.parse_args()
     configure_utf8_stdio()
 
@@ -99,25 +105,29 @@ def main() -> None:
                 "seeds": seeds, "cells": cells}
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
 
+    from src.secure_pipeline.corpus import seeded_corpus
     from src.secure_pipeline.experiments import Env, run_cell
     from src.secure_pipeline.instrumentation import RunLogger
 
+    for kv in args.only:
+        k, v = kv.split("=", 1)
+        cells = [c for c in cells if str(c.get(k)) == v]
     envs: dict[tuple, Env] = {}
     total = len(cells) * len(seeds)
     done = 0
     for cell in cells:
-        key = (cell.get("embedder", "all-MiniLM-L6-v2"),
-               cell.get("reranker", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
-               int(cell.get("chunk_tokens", 300)), cell.get("corpus", "synthetic"))
-        if key not in envs:
-            print(f"[run] loading embedder={key[0]} reranker={key[1]}", flush=True)
-            envs[key] = Env.build(*key)
         for seed in seeds:
+            key = (cell.get("embedder", "all-MiniLM-L6-v2"),
+                   cell.get("reranker", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+                   int(cell.get("chunk_tokens", 300)), seeded_corpus(cell.get("corpus", "synthetic"), seed))
             done += 1
             path = out_dir / "runs" / f"{cell['cell_id']}_s{seed}.jsonl"
             if path.exists() and not args.force:
                 print(f"[run] {done}/{total} skip {path.name} (exists)")
                 continue
+            if key not in envs:
+                print(f"[run] loading embedder={key[0]} reranker={key[1]} corpus={key[3]}", flush=True)
+                envs[key] = Env.build(*key)
             tmp = path.with_suffix(".partial")
             tmp.unlink(missing_ok=True)
             t0 = time.time()

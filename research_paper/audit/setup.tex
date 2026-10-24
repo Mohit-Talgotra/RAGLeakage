@@ -1,0 +1,55 @@
+\section{Experimental Setup}
+\label{sec:setup}
+
+\Cref{tab:grid} lists the experiments. All use five seeds (0--4) except the real-model existence run, which uses three. ``Units'' are revocation events for revocation experiments and test probes for existence experiments. Events are paired across configurations within an experiment.
+
+\begin{table*}[tbp]
+\centering
+\caption{Experiments. RQ1: which artifacts leak. RQ2: how long. RQ3: existence inference. RQ4: ablation. RQ5: cost. The last two rows repeat selected configurations with Qwen2.5-3B.}
+\label{tab:grid}
+\small
+\begin{tabular}{@{}lp{10.2cm}cr@{}}
+\toprule
+RQ & Grid & Seeds & Units per cell \\
+\midrule
+1 & re-opened artifact $\in$ \{none, index, cache, memory\} $\times$ revocation type (3); preset full; daily ACL crawl & 5 & 250 events \\
+2a & ACL sync $\in$ \{hourly, daily, event-driven, event-driven with 5\% lost webhooks and daily backstop\} $\times$ cache TTL $\in$ \{600, 3600, 86400\,s\}; preset baseline & 5 & 200 events \\
+2b & cache threshold $\in$ \{0.80, 0.85, 0.90, 0.95\} $\times$ TTL $\in$ \{600, 3600, 21600\,s\}; baseline; live ACLs; reworded probes & 5 & 200 events \\
+3 & preset (4) $\times$ exposure profile (3) $\times$ attacker (insider, outsider) & 5 & 4800 test probes \\
+4a & leave-one-out from full over 7 switches plus none; lossy webhooks & 5 & 200 events \\
+4b & ACL pre-filter $\{$on, off$\}$ $\times$ leave-one-out of 4 metadata switches plus none $\times$ variant (as is, fast refusal, 30\,ms floor, 2\,s deadline) & 5 & 1920 test probes \\
+5 & utility, 4 presets & 5 & 3000 queries \\
+5 & leakage, 4 presets; daily crawl & 5 & 250 events \\
+real & generator $\in$ \{stub, Qwen2.5-3B\} $\times$ preset $\in$ \{baseline, full\}; daily crawl & 5 & 100 events (5$\times$20) \\
+real & Qwen2.5-3B existence, preset $\in$ \{strawman, baseline, full\} & 3 & 768 test probes \\
+\midrule
+\multicolumn{4}{@{}l}{\emph{Robustness and cost experiments (\cref{sec:method-review})}} \\
+1$'$ & as RQ1, with restricted warm-up (2 documents) & 5 & 250 events \\
+4a$'$ & as 4a, with an 18\,h probe added to the default grid & 5 & 200 events \\
+coll. & preset $\in$ \{baseline, legacy, full, full without transitive taint\} $\times$ revocation (single, role); restricted warm-up; retained-document probes & 5 & 200 events \\
+coll. & as above with Qwen2.5-7B; baseline and full; probes at 0\,s, 1\,h, 24\,h & 2 & 16 events \\
+stress & paste-back laundering; generator $\in$ \{Qwen2.5-3B, Qwen2.5-7B\} $\times$ query fingerprinting \{off, on\}; full; probes at 0\,s, 1\,h, 24\,h & 2 & 40 events \\
+base. & preset $\in$ \{baseline, authz\_prefilter, authz\_postfilter, full\} $\times$ revocation (single, offboarding); restricted warm-up & 5 & 250 events \\
+base. & same presets, existence inference, with reranker & 5 & 1920 test probes \\
+cost & utility with IAM round trip $\in$ \{0, 2, 10\,ms\} $\times$ \{baseline, full, full without padding\} & 5 & 3000 queries \\
+real & Qwen2.5-7B: revocation (baseline, full) & 5 & 100 events \\
+real & Qwen2.5-7B: existence (strawman, baseline, full) & 5 & 1280 test probes \\
+real & gpt-oss-120b (Groq): revocation (baseline, full) & 2 & 20 events \\
+Enron & revocation, stub; baseline, full $\times$ revocation (single, role) & 5 & 150 events \\
+Enron & revocation, Qwen2.5-7B; baseline, full; probes at 0\,s, 1, 12, 24, 48\,h & 2 & 24 events \\
+Enron & existence, stub; strawman, baseline, full & 5 & 3200 test probes \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Probe schedules.}
+The default schedule is 0\,s, 1\,min, 10\,min, 30\,min, and 1, 2, 4, 8, 12, 24, 36 and 48\,h. The sync-policy experiment (2a) uses 0\,s, 1, 5, 15 and 30\,min, and 1, 2, 4, 6, 12, 18, 24, 36 and 48\,h.
+
+\paragraph{Sync policies.}
+\emph{Periodic} crawls refresh the index ACL copy every $\Delta$ seconds. \emph{Event-driven} sync updates it when a webhook fires; a drop probability models lost webhooks, with an optional daily crawl as backstop.
+
+\paragraph{Implementation notes that affect interpretation.}
+Three corrections were made before the final runs. (i)~The cache-threshold sweep first repeated the exact warm-up question (cosine similarity 1.0), so every threshold behaved identically; the final run rewords the probe with one of seven templates (cosine 0.79--0.98 to the original). (ii)~The blast-radius metric was added because target-only $\LM$ cannot distinguish revocation types by construction. (iii)~The attacker's latency is rounded to 1\,ms: sub-millisecond floating-point noise from the simulator had produced a spurious AUC of 0.58 in the padded condition, and after rounding every padded-deadline cell is exactly 0.500. The rounding stands in for network jitter and is not a calibrated noise model.
+
+\paragraph{Environment.}
+Runs used Python 3.14, scikit-learn 1.9.1, ChromaDB 1.5.9 and sentence-transformers 6.1.0 on an Apple M5 laptop with 16\,GB of memory, with Ollama serving \texttt{qwen2.5:3b} for the real-model check. Real-model generations are cached on disk with their measured latency, so reruns replay them. \todo{Add the hardware and Ollama version used for the robustness runs, and note that latency-channel results are compared only within one machine.}

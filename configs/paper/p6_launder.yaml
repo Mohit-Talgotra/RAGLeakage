@@ -1,0 +1,20 @@
+# T8: paste-back laundering at scale (200 events per cell), with the per-user baseline cache
+# fixed, so the colleague path is through the defense's own shared state only. full_user and epoch
+# have per-user caches: compare their colleague rate with full's (and full's hit rate in p5_utility).
+name: p6_launder
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  sync: periodic:86400
+  events: 40
+  launder: true
+  probe_times: [0, 3600, 86400]
+  llm_backend: ollama
+  summarizer: llm
+grid:
+  preset: [full, full_user, epoch]
+  llm_model: [llama3.1:8b, qwen2.5:32b]
+  taint_user_input: [false, true]

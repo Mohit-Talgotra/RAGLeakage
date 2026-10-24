@@ -1,0 +1,16 @@
+# Existence side of the defense comparison.
+name: p4_defenses_existence
+experiment: existence
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  exposure: with_reranker
+  attackers: [insider, outsider]
+  victim_warmup: 0.5
+  sync: live
+  targets_per_tenant: 12
+  llm_backend: stub
+grid:
+  preset: [baseline, baseline_shared, authz_prefilter, authz_postfilter, epoch, flush, full, full_user, full_fine]

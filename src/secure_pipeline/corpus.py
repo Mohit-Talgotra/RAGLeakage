@@ -36,6 +36,21 @@ class Corpus:
 
     def __post_init__(self) -> None:
         self.by_id = {d["doc_id"]: d for d in self.docs}
+        self._unique: dict[str, frozenset[str]] = {}
+
+    def unique_facts(self, doc_id: str) -> frozenset[str]:
+        """Fact values of doc_id that occur in no other document's title or text. Only these
+        prove where content came from: "Dallas" or "0.58" in a response may come from any of
+        the other documents that contain them (audit C5)."""
+        if not self._unique:
+            blobs = [(d["doc_id"], f"{d['title']}\n{d['text']}") for d in self.docs]
+            for d in self.docs:
+                if not d["facts"]:
+                    continue
+                vals = {f["value"] for f in d["facts"]}
+                shared = {v for v in vals for other, blob in blobs if other != d["doc_id"] and v in blob}
+                self._unique[d["doc_id"]] = frozenset(vals - shared)
+        return self._unique.get(doc_id, frozenset())
 
     def doc(self, doc_id: str) -> dict:
         return self.by_id[doc_id]
@@ -50,18 +65,45 @@ class Corpus:
     def users_of(self, tenant_id: str) -> list[dict]:
         return [u for u in self.iam["users"] if u["tenant_id"] == tenant_id]
 
-    def secrets(self, doc_id: str) -> list[str]:
-        """Strings whose appearance in a response proves disclosure: fact values + canary."""
+    def secrets(self, doc_id: str, scorable: bool = False) -> list[str]:
+        """Strings whose appearance in a response proves disclosure: fact values + canary.
+        scorable=True keeps only corpus-unique fact values (what the judge counts)."""
         d = self.by_id[doc_id]
-        out = [f["value"] for f in d["facts"]]
+        unique = self.unique_facts(doc_id) if scorable else None
+        out = [f["value"] for f in d["facts"] if unique is None or f["value"] in unique]
         if d.get("canary"):
             out.append(d["canary"])
         return out
 
 
 def corpus_dir(name: str = "synthetic") -> Path:
-    """synthetic: data/ (generate_corpus.py); enron: data/enron/ (build_enron_corpus.py)."""
-    return DATA_DIR if name == "synthetic" else DATA_DIR / name
+    """synthetic: data/ (generate_corpus.py, v2, committed); enron: data/enron/
+    (build_enron_corpus.py); synthetic_v3: data/synthetic_v3/ (generate_corpus.py --profile v3);
+    synthetic_v3_s<k>: a v3 corpus generated from seed k, so seeds are real replicates (audit H1).
+    Missing v3 corpora are generated on first use."""
+    if name == "synthetic":
+        return DATA_DIR
+    path = DATA_DIR / name
+    if name.startswith("synthetic_v3") and not (path / "corpus.jsonl").exists():
+        _generate_v3(name, path)
+    return path
+
+
+V3_BASE_SEED = 20261022
+
+
+def _generate_v3(name: str, path: Path) -> None:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("generate_corpus", DATA_DIR.parent / "scripts" / "generate_corpus.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    seed = V3_BASE_SEED + (int(name.rsplit("_s", 1)[1]) if "_s" in name else 0)
+    gen.write(path, *gen.build(seed, 40, 30, 30, profile="v3"))
+
+
+def seeded_corpus(name: str, seed: int) -> str:
+    """'synthetic_v3@seed' -> 'synthetic_v3_s<seed>'; any other name is returned unchanged."""
+    return f"{name.removesuffix('@seed')}_s{seed}" if name.endswith("@seed") else name
 
 
 def load_corpus(data_dir: Path = DATA_DIR, chunk_tokens: int = 300) -> Corpus:

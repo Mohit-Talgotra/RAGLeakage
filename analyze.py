@@ -8,13 +8,21 @@ analyze.py -- Turn run.py JSONL logs into the paper's tables and figures.
 
 Writes <dir>/analysis/summary.md, one CSV per table, and PNG figures.
 
-revocation : per-event LM (secrets disclosed after revocation), per-surface LM
-             (cache / stale index / memory, attributed from ground truth), leakage
-             lifetime survival (Kaplan-Meier median + bootstrap CI), analytic sync
-             prediction, paired differences against a reference cell.
+revocation : per-event LM (secrets disclosed after revocation), split into LM_new (secrets the
+             victim was never shown before revocation) and LM_re (re-disclosure); LM_update
+             (secrets of the post-revocation version of the document); canary-only leak rate;
+             per-probe leak probability; LM from probes at >= 1 h and >= 24 h; per-surface LM
+             (cache / stale index / memory, attributed from ground truth), leakage lifetime
+             survival (Kaplan-Meier median + bootstrap CI), analytic sync prediction, share of
+             secrets that survive into summaries, taint-set size and authorization decisions per
+             query, paired differences against a reference cell (target-clustered CI, Wilcoxon on
+             per-target differences, Holm-adjusted p).
+             Secrets are judged with --judge-mode unique (default: corpus-unique values + canary).
 existence  : learned black-box attacker (logistic regression and gradient boosting)
-             trained on shadow tenants, tested on held-out tenants; AUC [95% CI],
-             TPR@1%FPR and balanced accuracy per channel x exposure profile x attacker.
+             trained on shadow tenants, tested on held-out tenants; AUC [95% CI clustered by
+             target], TPR@1%FPR and balanced accuracy per channel x exposure profile x attacker
+             (insider and outsider reported separately), and the same split by whether the target
+             has a project sibling (existence_strata.csv).
 utility    : Recall@k, nDCG@k, answer correctness, over-refusal, p50/p95 latency,
              cache hit rate; optional Pareto plot against leakage from another run.
 """
@@ -36,12 +44,15 @@ sys.path.insert(0, str(ROOT))
 
 from src.secure_pipeline.attacker import (CHANNELS, LearnedAttacker, ThresholdAttacker, features,
                                           project)
-from src.secure_pipeline.corpus import corpus_dir, load_corpus
+from src.secure_pipeline.corpus import corpus_dir, load_corpus, seeded_corpus
 from src.secure_pipeline.instrumentation import read_rows
 from src.secure_pipeline.judge import LLMJudge, disclosed
-from src.secure_pipeline.metrics import (auc_ci, bootstrap_ci, eia_metrics, fast_auc, fmt_ci, kaplan_meier,
-                                         km_median_ci, leak_lifetime, ndcg_at_k, paired_test, fmt_p,
-                                         percentile, recall_at_k)
+from src.secure_pipeline.metrics import (auc_ci, auc_ci_cluster, bootstrap_ci, cluster_ci, eia_metrics, fast_auc,
+                                         fmt_ci, holm, kaplan_meier, km_median_ci, leak_lifetime, ndcg_at_k,
+                                         paired_test, fmt_p, percentile, recall_at_k)
+
+JUDGE_MODE = "unique"
+TARGET_KINDS = ("same_session", "new_session", "new_session_unseen")
 
 # Reference categorical palette (fixed slot order; see the dataviz skill's palette.md).
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
@@ -81,15 +92,20 @@ def md_table(rows: list[dict], cols: list[str]) -> str:
 SYNC_LABELS = {"periodic:3600": "Hourly crawl", "periodic:86400": "Daily crawl", "event:0.0": "Event-driven",
                "event:0.05:86400": "Event-driven, 5% loss", "live": "Live ACLs"}
 VALUE_LABELS = {
-    "preset": {"strawman": "Strawman", "baseline": "Baseline", "legacy": "Legacy", "full": "Full defense",
+    "preset": {"strawman": "Strawman", "baseline": "Baseline", "baseline_shared": "Baseline, shared cache",
+               "legacy": "Legacy", "full": "Full defense", "full_fine": "Full, sentence taint",
+               "epoch": "Epoch invalidation", "flush": "Session flush",
                "authz_postfilter": "Live post-filter", "authz_prefilter": "Live pre-filter"},
     "open_surface": {"none": "None re-opened", "index": "Index re-opened", "cache": "Cache re-opened",
                      "memory": "Memory re-opened"},
-    "revocation_type": {"single_doc": "single doc", "role": "role", "user_offboard": "offboarding"},
+    "revocation_type": {"single_doc": "single doc", "role": "role", "user_offboard": "offboarding",
+                        "mover": "mover"},
     "acl_prefilter": {"True": "pre-filter", "False": "post-filter"},
     "variant": {"as_is": "as is", "fast_refusal": "fast refusal", "pad30": "30 ms floor", "deadline2s": "2 s deadline"},
 }
-MODEL_LABELS = {"qwen2.5:3b": "Qwen2.5-3B", "qwen2.5:7b": "Qwen2.5-7B", "openai/gpt-oss-120b": "GPT-OSS-120B"}
+MODEL_LABELS = {"qwen2.5:3b": "Qwen2.5-3B", "qwen2.5:7b": "Qwen2.5-7B", "llama3.1:8b": "Llama-3.1-8B",
+                "qwen2.5:32b": "Qwen2.5-32B", "llama3.3:70b": "Llama-3.3-70B",
+                "openai/gpt-oss-120b": "GPT-OSS-120B", "gpt-4o-mini": "GPT-4o-mini"}
 
 
 def pretty(label: str, cell: dict | None = None) -> str:
@@ -155,73 +171,150 @@ def surface_of(truth: dict, target: str) -> str:
         return "cache"
     if target in truth["stale_docs_used"]:
         return "index"
-    return "memory"
+    # Only a response whose prompt held memory can have leaked through memory.
+    return "memory" if truth.get("memory_turns", 1) else "other"
 
 
-def collect_events(rows: list[dict], corpus, judge: LLMJudge | None = None) -> dict[tuple, dict]:
+_LOADED: dict[str, object] = {}
+
+
+class Corpora:
+    """Corpus per seed: one shared corpus, or one per seed for 'synthetic_v3@seed' runs."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __call__(self, seed: int):
+        key = seeded_corpus(self.name, seed)
+        if key not in _LOADED:
+            _LOADED[key] = load_corpus(corpus_dir(key))
+        return _LOADED[key]
+
+
+def corpora_for(cell: dict) -> Corpora:
+    """Grids may vary the corpus (synthetic_v3@seed vs enron_c), so resolve it per cell."""
+    return Corpora(cell.get("corpus", "synthetic"))
+
+
+def _got(d) -> set:
+    return set(d.facts) | ({"<canary>"} if d.canary else set())
+
+
+def collect_events(rows: list[dict], corpora, judge: LLMJudge | None = None) -> dict[tuple, dict]:
     """Group post-revocation probes by (seed, event) and record which target secrets leaked,
     through which surface, and whether anything leaked at each probe time. Separately, count
-    the secrets of every warmed doc the victim lost (lost_docs), over all probes."""
+    the secrets of every warmed doc the victim lost (lost_docs), over all probes.
+    corpora: a Corpus or a seed -> Corpus callable (Corpora)."""
+    corpus_of = corpora if callable(corpora) else (lambda _seed: corpora)
     events: dict[tuple, dict] = {}
-    warm: dict[tuple, dict[str, set]] = defaultdict(dict)   # (seed, event) -> doc -> facts told at warm-up
+    warm: dict[tuple, dict[str, set]] = defaultdict(dict)   # (seed, event, who) -> doc -> secrets told at warm-up
     laundered: dict[tuple, bool] = {}
+    summaries: dict[tuple, list[str]] = defaultdict(list)
     for r in rows:
         g, t = r["tags"], r["truth"]
-        if g.get("phase") == "warm" and g.get("warm_doc"):
-            d = disclosed(corpus, g["warm_doc"], t["response"], [])
-            told = warm[(g["seed"], g["event"])].setdefault(g["warm_doc"], set())
-            told |= set(d.facts)
+        if "event" not in g:
+            continue
+        corpus = corpus_of(g["seed"])
+        key = (g["seed"], g["event"])
+        if g.get("who", "victim") == "victim" and g.get("phase") != "holder":
+            summaries[key] += t.get("summaries_written", [])
+        warm_doc = g.get("warm_doc")
+        if warm_doc is None and g.get("phase") == "warm" and g.get("target"):
+            # Older logs carry no warm_doc tag; the target's own warm-up questions are its QA questions.
+            if t["query"] in {x["question"] for x in corpus.doc(g["target"])["qa"]}:
+                warm_doc = g["target"]
+        who = g.get("who", "victim")
+        if g.get("phase") == "warm" and warm_doc:
+            d = disclosed(corpus, warm_doc, t["response"], [], mode=JUDGE_MODE)
+            warm[(*key, who)].setdefault(warm_doc, set()).update(_got(d))
         if g.get("phase") == "launder" and g.get("launder_final"):
             # The revoked victim's own answer after pasting: did the laundering work at all?
-            d = disclosed(corpus, g["target"], t["response"], t["source_docs"], judge)
-            laundered[(g["seed"], g["event"])] = bool(d.facts) or d.canary
+            d = disclosed(corpus, g["target"], t["response"], t["source_docs"], judge, mode=JUDGE_MODE)
+            laundered[key] = bool(d.facts) or d.canary
         if g.get("phase") != "probe":
             continue
-        ev = events.setdefault((g["seed"], g["event"]), {
+        ev = events.setdefault(key, {
             "target": g["target"], "secrets": set(), "by_surface": defaultdict(set),
-            "times": defaultdict(bool), "index_times": defaultdict(bool),
-            "n_secrets": len(corpus.secrets(g["target"])), "lost": set(),
-            "n_lost": sum(len(corpus.secrets(x)) for x in g.get("lost_docs", [])),
-            "retained": defaultdict(list), "colleague": set(),
-            "laundered": laundered.get((g["seed"], g["event"]))})
+            "times": defaultdict(bool), "index_times": defaultdict(bool), "secrets_at": defaultdict(set),
+            "n_secrets": len(corpus.secrets(g["target"], scorable=True)), "lost": set(),
+            "n_lost": sum(len(corpus.secrets(x, scorable=True)) for x in g.get("lost_docs", [])),
+            "retained": defaultdict(list), "colleague": set(), "probes": 0, "leaky_probes": 0,
+            "told": warm[(*key, "victim")].get(g["target"], set()), "has_canary": bool(corpus.doc(g["target"]).get("canary")),
+            "updated": list(g.get("updated_secrets") or []), "updated_got": set(),
+            "summaries": summaries[key], "taint_sizes": [], "authz_decisions": [],
+            "gap": g.get("revoke_gap_s"), "laundered": laundered.get(key)})
+        ev["taint_sizes"].append(len(t.get("response_taint", [])))
+        ev["authz_decisions"].append(t.get("authz_decisions", 0))
         kind = g.get("probe_kind")
-        if kind in ("retained_same", "retained_new"):
-            # Collateral: share of what the victim was told about a doc they still may read.
-            told = warm[(g["seed"], g["event"])].get(g["probe_doc"], set())
+        if kind in ("retained_same", "retained_new", "bystander_retained"):
+            # Collateral: share of what the victim (or the bystander) was told about a doc they still may read.
+            told = warm[(*key, who)].get(g["probe_doc"], set()) - {"<canary>"}
             if told:
-                got = set(disclosed(corpus, g["probe_doc"], t["response"], []).facts)
+                got = set(disclosed(corpus, g["probe_doc"], t["response"], [], mode=JUDGE_MODE).facts)
                 ev["retained"][kind].append(len(got & told) / len(told))
                 ev["retained"][kind + "_refused"].append(float(t["refused"]))
             continue
         if kind == "colleague":
-            d = disclosed(corpus, g["target"], t["response"], t["source_docs"], judge)
-            ev["colleague"] |= set(d.facts) | ({"<canary>"} if d.canary else set())
+            d = disclosed(corpus, g["target"], t["response"], t["source_docs"], judge, mode=JUDGE_MODE)
+            ev["colleague"] |= _got(d)
             continue
         for doc in g.get("lost_docs", []):
-            dd = disclosed(corpus, doc, t["response"], t["source_docs"], judge)
-            ev["lost"] |= {(doc, v) for v in dd.facts} | ({(doc, "<canary>")} if dd.canary else set())
-        if g.get("probe_doc", g["target"]) != g["target"]:
+            dd = disclosed(corpus, doc, t["response"], t["source_docs"], judge, mode=JUDGE_MODE)
+            ev["lost"] |= {(doc, v) for v in _got(dd)}
+        if g.get("probe_doc", g["target"]) != g["target"] or kind not in TARGET_KINDS:
             continue  # probes about other lost docs feed only the blast-radius count above
-        d = disclosed(corpus, g["target"], t["response"], t["source_docs"], judge)
-        got = set(d.facts) | ({"<canary>"} if d.canary else set())
+        got = _got(disclosed(corpus, g["target"], t["response"], t["source_docs"], judge, mode=JUDGE_MODE))
+        ev["updated_got"] |= {v for v in ev["updated"] if v in t["response"]}
+        ev["probes"] += 1
+        ev["leaky_probes"] += bool(got)
         ev["times"][g["probe_t"]] |= bool(got)
         ev["index_times"][g["probe_t"]] |= bool(got) and surface_of(t, g["target"]) == "index"
         if got:
             ev["secrets"] |= got
+            ev["secrets_at"][g["probe_t"]] |= got
             ev["by_surface"][surface_of(t, g["target"])] |= got
-    return events
+    return {k: e for k, e in events.items() if e["n_secrets"]}
 
 
 def event_lm(events: dict[tuple, dict]) -> dict[tuple, float]:
     return {k: len(e["secrets"]) / e["n_secrets"] for k, e in events.items()}
 
 
-def analyze_revocation(manifest, cells, by_cell, corpus, out: Path, reference: str | None,
+def _summary_retention(e: dict, corpus) -> float | None:
+    """Share of the target's scorable secrets present in any summary written during the event."""
+    if not e["summaries"]:
+        return None
+    secrets = corpus.secrets(e["target"], scorable=True)
+    blob = "\n".join(e["summaries"])
+    return sum(v in blob for v in secrets) / len(secrets)
+
+
+def analyze_revocation(manifest, cells, by_cell, out: Path, reference: str | None,
                        judge: LLMJudge | None = None) -> str:
-    table, events_by_cell, curves, event_rows = [], {}, {}, []
+    table, events_by_cell, targets_by_cell, curves, event_rows = [], {}, {}, {}, []
     for cell in cells:
-        events = collect_events(by_cell[cell["cell_id"]], corpus, judge)
+        corpus_of = corpora_for(cell)
+        events = collect_events(by_cell[cell["cell_id"]], corpus_of, judge)
         lm = event_lm(events)
+        # A doc id names a different document in each seed's corpus when corpora are per seed.
+        per_seed = str(cell.get("corpus", "")).endswith("@seed")
+        tkey = (lambda k, e: (k[0], e["target"])) if per_seed else (lambda k, e: e["target"])
+        targets = [tkey(k, e) for k, e in events.items()]
+        targets_by_cell[cell["cell_id"]] = {k: tkey(k, e) for k, e in events.items()}
+        lm_new = [len(e["secrets"] - e["told"]) / e["n_secrets"] for e in events.values()]
+        lm_re = [len(e["secrets"] & e["told"]) / e["n_secrets"] for e in events.values()]
+        told = [len(e["told"]) / e["n_secrets"] for e in events.values()]
+        lm_1h = [len(set().union(*[v for t_, v in e["secrets_at"].items() if t_ >= 3600])) / e["n_secrets"]
+                 for e in events.values()]
+        lm_24h = [len(set().union(*[v for t_, v in e["secrets_at"].items() if t_ >= 86400])) / e["n_secrets"]
+                  for e in events.values()]
+        canary_rate = [float("<canary>" in e["secrets"]) for e in events.values() if e["has_canary"]]
+        probe_rate = [e["leaky_probes"] / e["probes"] for e in events.values() if e["probes"]]
+        upd = [len(e["updated_got"]) / len(e["updated"]) for e in events.values() if e["updated"]]
+        retention = [x for e_key, e in events.items()
+                     if (x := _summary_retention(e, corpus_of(e_key[0]))) is not None]
+        taint_sizes = [x for e in events.values() for x in e["taint_sizes"]]
+        decisions = [x for e in events.values() for x in e["authz_decisions"]]
         lm_s = {s: [len(e["by_surface"][s]) / e["n_secrets"] for e in events.values()] for s in SURFACE_COLORS}
         lm_lost = [len(e["lost"]) / e["n_lost"] for e in events.values() if e["n_lost"]]
         n_lost_docs = [len({doc for doc, _ in e["lost"]}) for e in events.values() if e["n_lost"]]
@@ -250,19 +343,31 @@ def analyze_revocation(manifest, cells, by_cell, corpus, out: Path, reference: s
             vals = [float(np.mean(e["retained"][key])) for e in events.values() if e["retained"][key]]
             return fmt_ci(*bootstrap_ci(vals)) if vals else "n/a"
         coll = [len(e["colleague"]) / e["n_secrets"] for e in events.values()]
+        coll_rate = [float(bool(e["colleague"])) for e in events.values()]
         has_coll = any(r["tags"].get("probe_kind") == "colleague" for r in by_cell[cell["cell_id"]])
         for e_key, e in events.items():
             event_rows.append({"cell": cell["label"], "seed": e_key[0], "event": e_key[1], "target": e["target"],
                                "LM": round(lm[e_key], 4),
                                "LM_all_lost": round(len(e["lost"]) / e["n_lost"], 4) if e["n_lost"] else "",
                                "lifetime_s": life_by_key[e_key][0], "censored": not life_by_key[e_key][1]})
+        def cci(vals):
+            return fmt_ci(*cluster_ci(vals, targets)) if len(vals) == len(targets) and vals else "n/a"
         table.append({
-            "cell": cell["label"], "events": len(events),
-            "LM": fmt_ci(*bootstrap_ci(list(lm.values()))),
-            "LM_cache": fmt_ci(*bootstrap_ci(lm_s["cache"])),
-            "LM_index": fmt_ci(*bootstrap_ci(lm_s["index"])),
-            "LM_memory": fmt_ci(*bootstrap_ci(lm_s["memory"])),
+            "cell": cell["label"], "events": len(events), "targets": len(set(targets)),
+            "LM": cci(list(lm.values())),
+            "LM_new": cci(lm_new), "LM_re": cci(lm_re), "told_at_warmup": f"{np.mean(told):.3f}",
+            "LM_from_1h": cci(lm_1h), "LM_from_24h": cci(lm_24h),
+            "LM_update": fmt_ci(*bootstrap_ci(upd)) if upd else "n/a",
+            "canary_leak_rate": f"{np.mean(canary_rate):.3f}" if canary_rate else "n/a",
+            "probe_leak_prob": f"{np.mean(probe_rate):.3f}" if probe_rate else "n/a",
+            "LM_cache": cci(lm_s["cache"]),
+            "LM_index": cci(lm_s["index"]),
+            "LM_memory": cci(lm_s["memory"]),
             "leak_rate": f"{np.mean([v > 0 for v in lm.values()]):.3f}",
+            "summary_retains": f"{np.mean(retention):.3f}" if retention else "n/a",
+            "taint_size_mean": f"{np.mean(taint_sizes):.2f}" if taint_sizes else "n/a",
+            "taint_size_p95": f"{percentile(taint_sizes, 95):.0f}" if taint_sizes else "n/a",
+            "authz_decisions_per_query": f"{np.mean(decisions):.2f}" if decisions else "n/a",
             "LM_all_lost": fmt_ci(*bootstrap_ci(lm_lost)) if lm_lost else "n/a",
             "lost_docs_leaked_mean": f"{np.mean(n_lost_docs):.2f}" if n_lost_docs else "n/a",
             "LH_median_s": fmt_ci(*med, digits=0),
@@ -273,8 +378,11 @@ def analyze_revocation(manifest, cells, by_cell, corpus, out: Path, reference: s
             "analytic_index_staleness_mean_s": analytic,
             "retained_recall_same": ev_mean("retained_same"),
             "retained_recall_new": ev_mean("retained_new"),
+            "bystander_recall": ev_mean("bystander_retained"),
+            "bystander_refusal": ev_mean("bystander_retained_refused"),
             "retained_refusal_same": ev_mean("retained_same_refused"),
             "LM_colleague": fmt_ci(*bootstrap_ci(coll)) if has_coll else "n/a",
+            "colleague_event_rate": f"{np.mean(coll_rate):.3f}" if has_coll else "n/a",
             "launder_success": (f"{np.mean([bool(e['laundered']) for e in events.values()]):.3f}" if has_coll
                                 else "n/a"),
             "_lm_surface_means": {s: float(np.mean(v)) if v else 0.0 for s, v in lm_s.items()},
@@ -287,10 +395,16 @@ def analyze_revocation(manifest, cells, by_cell, corpus, out: Path, reference: s
             continue
         a, b = events_by_cell[cell["cell_id"]], events_by_cell[ref["cell_id"]]
         keys = sorted(set(a) & set(b))
-        res = paired_test([a[k] for k in keys], [b[k] for k in keys], [k[0] for k in keys])
+        tgt = targets_by_cell[cell["cell_id"]]
+        res = paired_test([a[k] for k in keys], [b[k] for k in keys], [tgt[k] for k in keys])
         paired.append({"cell": cell["label"], "vs": ref["label"], "delta_LM": fmt_ci(res["diff"], res["lo"], res["hi"]),
                        "CI_cluster": f"[{res['lo_cluster']:.3f}, {res['hi_cluster']:.3f}]",
-                       "p": fmt_p(res["p"]), "p_wilcoxon": fmt_p(res["p_wilcoxon"], None), "pairs": res["n"]})
+                       "p": fmt_p(res["p"]), "p_wilcoxon": res["p_wilcoxon"], "pairs": res["n"],
+                       "targets": res.get("clusters", "")})
+    if paired:
+        for row, adj in zip(paired, holm([r["p_wilcoxon"] for r in paired])):
+            row["p_holm"] = fmt_p(adj, None)
+            row["p_wilcoxon"] = fmt_p(row["p_wilcoxon"], None)
 
     surface_means = {r["cell"]: r.pop("_lm_surface_means") for r in table}
     write_csv(out / "revocation_summary.csv", table)
@@ -346,29 +460,41 @@ def analyze_revocation(manifest, cells, by_cell, corpus, out: Path, reference: s
     _save(fig, out, "rq1_surfaces")
     plt.close(fig)
 
-    cols = ["cell", "events", "LM", "LM_cache", "LM_index", "LM_memory", "leak_rate", "LM_all_lost",
+    cols = ["cell", "events", "targets", "LM", "LM_new", "LM_re", "told_at_warmup", "LM_from_1h", "LM_from_24h",
+            "canary_leak_rate", "probe_leak_prob", "LM_cache", "LM_index", "LM_memory", "leak_rate", "LM_all_lost",
             "lost_docs_leaked_mean", "LH_median_s",
             "LH_median_leaking_s", "censored", "LH_index_median_leaking_s",
             "analytic_index_staleness_mean_s"]
-    cols += [c for c in ("retained_recall_same", "retained_recall_new", "retained_refusal_same", "LM_colleague",
-                         "launder_success")
+    cols += [c for c in ("LM_update", "summary_retains", "taint_size_mean", "taint_size_p95",
+                         "authz_decisions_per_query", "retained_recall_same", "retained_recall_new",
+                         "bystander_recall", "bystander_refusal",
+                         "retained_refusal_same", "LM_colleague", "colleague_event_rate", "launder_success")
              if any(r[c] != "n/a" for r in table)]
     text = "## Revocation window\n\n" + md_table(table, cols)
     if paired:
         text += "\n\nPaired difference in event LM (same seeds and events):\n\n" + md_table(
-            paired, ["cell", "vs", "delta_LM", "CI_cluster", "p", "p_wilcoxon", "pairs"])
-        text += ("\n\nCI: event-level bootstrap; CI_cluster: two-stage bootstrap over seeds, then events. "
-                 "p: bootstrap (resolution 1/2000); p_wilcoxon: Wilcoxon signed-rank, zero differences dropped.")
+            paired, ["cell", "vs", "delta_LM", "CI_cluster", "p", "p_wilcoxon", "p_holm", "pairs", "targets"])
+        text += ("\n\nCI: event-level bootstrap; CI_cluster: bootstrap over target documents. "
+                 "p: bootstrap (resolution 1/2000); p_wilcoxon: Wilcoxon signed-rank on per-target mean "
+                 "differences, zero differences dropped; p_holm: Holm-adjusted over this table.")
+    text += ("\n\nLM, LM_new, LM_re and per-surface intervals are clustered by target document. "
+             f"Judge mode: {JUDGE_MODE}.")
     text += "\n\nFigures: rq2_survival.png, rq1_surfaces.png\n"
     return text
 
 
 # ---- Existence inference (RQ3) --------------------------------------------------------
 
+def _has_sibling(corpus, doc_id: str) -> bool:
+    project = corpus.doc(doc_id).get("project")
+    return bool(project) and sum(d.get("project") == project for d in corpus.restricted()) > 1
+
+
 def analyze_existence(manifest, cells, by_cell, out: Path, train_tenants: list[str] | None) -> str:
     profiles = ("text_only", "with_sources", "with_reranker")
-    table, roc_data, score_rows, bucket_rows = [], {}, [], []
+    table, roc_data, score_rows, bucket_rows, strata_rows = [], {}, [], [], []
     for cell in cells:
+        corpora = corpora_for(cell)
         probes = [r for r in by_cell[cell["cell_id"]] if r["tags"].get("phase") == "probe"]
         if any(r["truth"]["pad_ms"] > 0 for r in probes) and cell.get("pad_strategy", "bucket") == "bucket":
             # Residual timing signal of bucket padding: a response slower than one bucket lands in
@@ -400,13 +526,30 @@ def analyze_existence(manifest, cells, by_cell, out: Path, train_tenants: list[s
                 # Trial = one attacker's four probes against one target in one world.
                 trial = [(r["tags"]["seed"], r["tags"]["target"], r["tags"]["attacker"], r["tags"]["world"])
                          for r, m in zip(rows, tr) if not m]
+                # CI clusters: the target document (it recurs across seeds, worlds and probes).
+                per_seed = str(cell.get("corpus", "")).endswith("@seed")
+                clusters = [(r["tags"]["seed"], r["tags"]["target"]) if per_seed else r["tags"]["target"]
+                            for r, m in zip(rows, tr) if not m]
+                sibling = np.array([bool(r["tags"]["has_sibling"]) if "has_sibling" in r["tags"] else
+                                    _has_sibling(corpora(r["tags"]["seed"]), r["tags"]["target"])
+                                    for r, m in zip(rows, tr) if not m])
                 thr = np.array([ThresholdAttacker().score(f) for f in f_te])
                 base = {"cell": cell["label"], "attacker": attacker, "profile": profile, "n_test": len(y_te)}
-                table.append({**base, "model": "threshold", "channel": "rules", **_eia_cols(y_te, thr, trial)})
+                table.append({**base, "model": "threshold", "channel": "rules",
+                              **_eia_cols(y_te, thr, trial, clusters)})
                 for model in ("logreg", "gboost"):
                     scores = LearnedAttacker(model).fit(f_tr, y_tr).scores(f_te)
                     for ch in list(CHANNELS) + ["combined"]:
-                        table.append({**base, "model": model, "channel": ch, **_eia_cols(y_te, scores[ch], trial)})
+                        table.append({**base, "model": model, "channel": ch,
+                                      **_eia_cols(y_te, scores[ch], trial, clusters)})
+                    if model == "gboost":
+                        for name, mask in (("sibling", sibling), ("singleton", ~sibling)):
+                            if mask.any() and len(set(y_te[mask])) == 2:
+                                idx = np.where(mask)[0]
+                                strata_rows.append({**base, "stratum": name, "n_test": int(mask.sum()),
+                                                    "targets": len({clusters[i] for i in idx}),
+                                                    **_eia_cols(y_te[mask], scores["combined"][mask],
+                                                                [trial[i] for i in idx], [clusters[i] for i in idx])})
                         if model == "gboost" and profile == "with_reranker" and attacker == "all":
                             roc_data.setdefault(cell["label"], {})[ch] = (y_te, scores[ch])
                     if model == "gboost" and profile == "with_reranker" and attacker == "all":
@@ -421,6 +564,7 @@ def analyze_existence(manifest, cells, by_cell, out: Path, train_tenants: list[s
     write_csv(out / "existence_eia.csv", table)
     write_csv(out / "probe_scores.csv", score_rows)
     write_csv(out / "pad_buckets.csv", bucket_rows)
+    write_csv(out / "existence_strata.csv", strata_rows)
 
     plt = _plt()
     from sklearn.metrics import roc_curve
@@ -470,10 +614,15 @@ def analyze_existence(manifest, cells, by_cell, out: Path, train_tenants: list[s
         plt.close(fig)
         figures.append("rq3_roc.png")
 
-    key = [r for r in table if r["attacker"] == "all" and r["model"] in ("gboost", "threshold")
+    key = [r for r in table if r["model"] in ("gboost", "threshold")
            and r["channel"] in ("combined", "rules", "latency", "refusal", "score", "content")]
     text = "## Existence inference (twin worlds, held-out tenants)\n\n" + md_table(
-        key, ["cell", "profile", "model", "channel", "AUC", "AUC_trial", "TPR@1%FPR", "balanced_acc", "n_test"])
+        key, ["cell", "attacker", "profile", "model", "channel", "AUC", "AUC_trial", "TPR@1%FPR", "balanced_acc",
+              "n_test"])
+    text += "\n\nAUC intervals resample target documents (clustered ROC). Insider and outsider are separate rows."
+    if strata_rows:
+        text += "\n\nBy whether the target has a project sibling (gboost, combined):\n\n" + md_table(
+            strata_rows, ["cell", "attacker", "profile", "stratum", "AUC", "AUC_trial", "TPR@1%FPR", "n_test", "targets"])
     if bucket_rows:
         text += "\n\nLatency padding buckets (share of probes per bucket, by world):\n\n" + md_table(
             bucket_rows, list(bucket_rows[0]))
@@ -482,8 +631,9 @@ def analyze_existence(manifest, cells, by_cell, out: Path, train_tenants: list[s
     return text
 
 
-def _eia_cols(y, s, trial_keys) -> dict:
-    """Per-probe metrics, plus trial-level AUC where the attacker averages its four probe scores."""
+def _eia_cols(y, s, trial_keys, clusters=None) -> dict:
+    """Per-probe metrics, plus trial-level AUC where the attacker averages its four probe scores.
+    With clusters (target ids), intervals resample targets instead of probes or trials."""
     s = np.asarray(s)
     m = eia_metrics(y, s)
     groups: dict[tuple, list[int]] = defaultdict(list)
@@ -491,13 +641,18 @@ def _eia_cols(y, s, trial_keys) -> dict:
         groups[k].append(i)
     ty = np.array([y[idx[0]] for idx in groups.values()])
     ts = np.array([s[idx].mean() for idx in groups.values()])
-    return {"AUC": fmt_ci(*auc_ci(y, s)), "AUC_trial": fmt_ci(*auc_ci(ty, ts)),
+    if clusters is None:
+        return {"AUC": fmt_ci(*auc_ci(y, s)), "AUC_trial": fmt_ci(*auc_ci(ty, ts)),
+                "TPR@1%FPR": f"{m['tpr_at_1fpr']:.3f}", "balanced_acc": f"{m['balanced_acc']:.3f}"}
+    tc = [clusters[idx[0]] for idx in groups.values()]
+    return {"AUC": fmt_ci(*auc_ci_cluster(y, s, clusters)), "AUC_trial": fmt_ci(*auc_ci_cluster(ty, ts, tc)),
+            "AUC_probe_iid": fmt_ci(*auc_ci(y, s)),
             "TPR@1%FPR": f"{m['tpr_at_1fpr']:.3f}", "balanced_acc": f"{m['balanced_acc']:.3f}"}
 
 
 # ---- Utility (RQ5) ------------------------------------------------------------------
 
-def analyze_utility(manifest, cells, by_cell, out: Path, leakage_dir: Path | None, corpus) -> str:
+def analyze_utility(manifest, cells, by_cell, out: Path, leakage_dir: Path | None) -> str:
     table, points = [], {}
     for cell in cells:
         rows = by_cell[cell["cell_id"]]
@@ -517,12 +672,13 @@ def analyze_utility(manifest, cells, by_cell, out: Path, leakage_dir: Path | Non
             "p50_ms": f"{percentile(lat, 50):.0f}", "p95_ms": f"{percentile(lat, 95):.0f}",
             "cache_hit_rate": fmt_ci(*bootstrap_ci(hits)),
             "authz_calls": f"{np.mean([r['truth'].get('authz_calls', 0) for r in rows]):.2f}",
+            "authz_decisions": f"{np.mean([r['truth'].get('authz_decisions', 0) for r in rows]):.2f}",
         })
         points[cell.get("preset", cell["label"])] = percentile(lat, 50)
     write_csv(out / "utility_summary.csv", table)
     text = "## Utility and cost\n\n" + md_table(
         table, ["cell", "queries", "Recall@k", "nDCG@k", "correct", "over_refusal", "p50_ms", "p95_ms",
-                "cache_hit_rate", "authz_calls"])
+                "cache_hit_rate", "authz_calls", "authz_decisions"])
 
     if leakage_dir is not None:
         m2, cells2, by2 = load(leakage_dir)
@@ -532,7 +688,7 @@ def analyze_utility(manifest, cells, by_cell, out: Path, leakage_dir: Path | Non
             if key in lm_by_preset:
                 raise ValueError(f"--leakage run has several cells with preset {key!r}; "
                                  "use a run whose grid varies preset only (configs/rq5_leakage.yaml)")
-            vals = list(event_lm(collect_events(by2[c["cell_id"]], corpus)).values())
+            vals = list(event_lm(collect_events(by2[c["cell_id"]], corpora_for(c))).values())
             lm_by_preset[key] = float(np.mean(vals)) if vals else math.nan
         common = [p for p in points if p in lm_by_preset]
         if common:
@@ -561,7 +717,11 @@ def main() -> None:
                     help="llm: also count paraphrased facts, judged by --judge-backend (cached on disk)")
     ap.add_argument("--judge-backend", default="groq")
     ap.add_argument("--judge-model", help="model for --judge-backend (default: the backend's default)")
+    ap.add_argument("--judge-mode", choices=["unique", "source"], default="unique",
+                    help="unique: score only corpus-unique fact values + canary; source: the pre-audit rule")
     args = ap.parse_args()
+    global JUDGE_MODE
+    JUDGE_MODE = args.judge_mode
     judge = None
     if args.judge == "llm":
         import random
@@ -572,14 +732,13 @@ def main() -> None:
     manifest, cells, by_cell = load(args.run_dir)
     out = args.run_dir / "analysis"
     out.mkdir(exist_ok=True)
-    corpus = load_corpus(corpus_dir(cells[0].get("corpus", "synthetic")) if cells else corpus_dir())
     kind = manifest["experiment"]
     if kind == "revocation":
-        text = analyze_revocation(manifest, cells, by_cell, corpus, out, args.reference, judge)
+        text = analyze_revocation(manifest, cells, by_cell, out, args.reference, judge)
     elif kind == "existence":
         text = analyze_existence(manifest, cells, by_cell, out, args.train_tenants)
     elif kind == "utility":
-        text = analyze_utility(manifest, cells, by_cell, out, args.leakage, corpus)
+        text = analyze_utility(manifest, cells, by_cell, out, args.leakage)
     else:
         raise ValueError(kind)
     header = f"# {manifest['name']}\n\nseeds: {manifest['seeds']}\n\n"

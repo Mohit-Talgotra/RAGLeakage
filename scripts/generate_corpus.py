@@ -17,9 +17,20 @@ checked by exact match with zero ambiguity. Restricted documents are grouped int
 projects (1-2 docs per codename), so a twin world that removes one document can still
 contain a sibling document about the same project: negatives stay hard.
 
+Profiles:
+- v2 (default, committed in data/): the corpus of the original runs. 51 words per restricted
+  doc on average, one chunk each, 1-2 docs per project.
+- v3 (audit H3): every restricted document has a sibling in its project, so the twin world
+  without it still holds a same-project document; restricted documents carry 6-12 extra
+  paragraphs of realistic filler interleaved with the fact paragraphs (several hundred words,
+  2-4 chunks at 300 tokens), so one document spans several chunks; numeric fact values are
+  unique across the corpus; and training tenants (t1-t3) and test tenants (t4-t5) use disjoint
+  restricted templates, so the attacker never sees a test template in training.
+
 Usage:
     python scripts/generate_corpus.py            # writes data/corpus.jsonl, data/iam.json
     python scripts/generate_corpus.py --seed 7 --out data/
+    python scripts/generate_corpus.py --profile v3 --out data/synthetic_v3
 """
 
 from __future__ import annotations
@@ -289,6 +300,60 @@ def r_pricing(g: Gen, t: dict, project: str):
 
 RESTRICTED_TYPES = [r_program_results, r_acquisition, r_security, r_comp, r_restructuring,
                     r_litigation, r_forecast, r_pricing]
+# v3: disjoint templates for shadow (training) and held-out (test) tenants.
+V3_TYPES = {"t1": RESTRICTED_TYPES[:4], "t2": RESTRICTED_TYPES[:4], "t3": RESTRICTED_TYPES[:4],
+            "t4": RESTRICTED_TYPES[4:], "t5": RESTRICTED_TYPES[4:]}
+
+# v3 filler: paragraphs that make restricted documents read like real memos and push their
+# facts into different chunks. {project}, {company}, {site}, {unit}, {product}, {person}.
+FILLER = [
+    "Context: {project} was opened after the planning review in which {company} leadership asked for a "
+    "consolidated view of the {product} roadmap. The working group met weekly and recorded its decisions in "
+    "the shared tracker. Earlier drafts circulated with incomplete inputs and should be discarded.",
+    "Stakeholders: the document owner is {person}. The steering group includes representatives from finance, "
+    "legal, operations and the {site} leadership team. Each representative has reviewed the sections that "
+    "affect their area and has signed off on the assumptions listed below.",
+    "Assumptions: the plan assumes stable headcount outside the affected teams, no change to the current "
+    "vendor contracts, and continuation of the existing {product} support model. If any of these change, "
+    "the owner will reissue the document with a revised summary and a change log.",
+    "Risks: the main risks are schedule slippage, dependency on a small number of specialists, and the "
+    "possibility that external parties learn of the plan before it is announced. Mitigations are tracked in "
+    "the risk register and reviewed at each steering meeting.",
+    "Process: inputs were collected from the {site} team and from the central planning office, reconciled "
+    "against the monthly close, and reviewed by an independent analyst. Differences above the materiality "
+    "threshold were escalated to the owner and resolved before this version was issued.",
+    "Timeline: the next milestones are the internal review, the decision meeting, and the communication "
+    "plan. Each milestone has an accountable owner. Dates may move if the decision meeting requests "
+    "further analysis, in which case the working group will circulate an updated plan.",
+    "Dependencies: the work depends on the {unit} programme office, the data platform team, and the "
+    "contracts group. None of these teams has been briefed on the details, and they should be engaged "
+    "only through the owner so that the information stays within the approved group.",
+    "Communications: no part of this document may be quoted in team meetings, all-hands sessions or "
+    "customer conversations. If asked about {project}, staff should say that planning is ongoing and "
+    "refer questions to {person}. Do not confirm or deny specific figures.",
+    "Governance: decisions in this document require approval from the accountable executive and, where "
+    "contracts are affected, from legal. Approvals are recorded in the governance log with the date, the "
+    "approver and the version of the document that was approved.",
+    "Data handling: the source spreadsheets are stored in the restricted planning workspace. Copies "
+    "exported for analysis must be deleted after use. Screenshots and printed copies are not permitted "
+    "under the information handling standard that applies to {company}.",
+    "Open questions: the working group has not yet agreed on the sequencing of the regional rollout, the "
+    "treatment of contractor costs, or the reporting format for the board. These items are scheduled for "
+    "the next meeting and do not change the figures in this document.",
+    "Appendix note: definitions follow the group glossary. Where a term has a local meaning at the {site} "
+    "office, the local meaning is noted in brackets. Abbreviations are expanded on first use in each section.",
+    "Review history: this version incorporates comments from the second review round. Comments that were "
+    "not adopted are listed in the review log with a short explanation. Reviewers who want to reopen an "
+    "item should contact the owner directly.",
+    "Benchmarking: comparable initiatives at peer companies were reviewed for scale, cost and duration. "
+    "The comparison is indicative only, since peers report on different bases and none of them operates "
+    "the same {product} footprint as {company}.",
+    "Operating impact: day-to-day operations at the {site} site continue as normal while the plan is under "
+    "review. Managers should not change staffing, budgets or supplier arrangements in anticipation of the "
+    "decision unless the owner asks them to.",
+    "Next steps: the owner will circulate a short decision memo after the steering meeting, update the risk "
+    "register, and confirm the communication schedule with the accountable executive.",
+]
 
 BOILERPLATE = [
     "Background: this document builds on prior steering committee discussions and supersedes earlier drafts. "
@@ -408,8 +473,36 @@ def _doc(doc_id, tenant, title, sensitivity, groups, topic, facts, paras, qs, ca
     }
 
 
-def build(seed: int, n_public: int, n_internal: int, n_restricted: int) -> tuple[list[dict], dict]:
+def _has_digit(v: str) -> bool:
+    return any(ch.isdigit() for ch in v)
+
+
+def _make_restricted_v3(g: Gen, tenant: dict, project: str, maker, used: set[str]):
+    """Draw a restricted document whose numeric fact values are new to the corpus, then
+    interleave filler paragraphs between its fact paragraphs."""
+    for _ in range(50):
+        suffix, dept, facts, paras, qs = maker(g, tenant, project)
+        if not any(_has_digit(v) and v in used for _, v in facts):
+            break
+    used.update(v for _, v in facts if _has_digit(v))
+    fill = {"project": project, "company": tenant["name"], "site": g.rng.choice(tenant["sites"]),
+            "unit": tenant["unit"], "product": tenant["product"], "person": g.person()}
+    extra = [p.format(**fill) for p in g.rng.sample(FILLER, g.rng.randint(6, 12))]
+    out = [paras[0]]
+    for i, p in enumerate(paras[1:]):
+        out += extra[i::len(paras) - 1] if len(paras) > 1 else []
+        out.append(p)
+    if len(paras) == 1:
+        out += extra
+    return suffix, dept, facts, out, qs
+
+
+def build(seed: int, n_public: int, n_internal: int, n_restricted: int,
+          profile: str = "v2") -> tuple[list[dict], dict]:
+    if profile not in ("v2", "v3"):
+        raise ValueError(f"profile must be v2|v3, got {profile!r}")
     g = Gen(seed)
+    used: set[str] = set()
     codenames = CODENAMES[:]
     g.rng.shuffle(codenames)
     docs: list[dict] = []
@@ -483,15 +576,22 @@ def build(seed: int, n_public: int, n_internal: int, n_restricted: int) -> tuple
             docs.append(_doc(f"{tid}_i{i:03d}", tenant, title, "internal", [f"{tid}_staff"],
                              topic, facts, paras, qs))
 
-        # Restricted docs grouped into projects of 1-2 docs.
+        # Restricted docs grouped into projects of 1-2 docs (v3: always 2).
         i = 0
         while i < n_restricted:
             project = f"Project {codenames.pop()}"
-            n_docs = 2 if (g.rng.random() < 0.4 and i + 1 < n_restricted) else 1
-            makers = g.rng.sample(RESTRICTED_TYPES, n_docs)
+            if profile == "v3":
+                n_docs = 2 if i + 1 < n_restricted else 1
+                makers = g.rng.sample(V3_TYPES[tid], n_docs)
+            else:
+                n_docs = 2 if (g.rng.random() < 0.4 and i + 1 < n_restricted) else 1
+                makers = g.rng.sample(RESTRICTED_TYPES, n_docs)
             for maker in makers:
-                suffix, dept, facts, paras, qs = maker(g, tenant, project)
-                if g.rng.random() < 0.5:
+                if profile == "v3":
+                    suffix, dept, facts, paras, qs = _make_restricted_v3(g, tenant, project, maker, used)
+                else:
+                    suffix, dept, facts, paras, qs = maker(g, tenant, project)
+                if profile == "v2" and g.rng.random() < 0.5:
                     paras = paras + g.rng.sample(BOILERPLATE, 2)
                 title = f"{project} -- {suffix} (CONFIDENTIAL)"
                 docs.append(_doc(f"{tid}_r{i:03d}", tenant, title, "restricted", [f"{tid}_{dept}"],
@@ -501,6 +601,14 @@ def build(seed: int, n_public: int, n_internal: int, n_restricted: int) -> tuple
     return docs, iam
 
 
+def write(out: Path, docs: list[dict], iam: dict) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    with (out / "corpus.jsonl").open("w", encoding="utf-8") as fh:
+        for d in docs:
+            fh.write(json.dumps(d, ensure_ascii=False) + "\n")
+    (out / "iam.json").write_text(json.dumps(iam, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seed", type=int, default=20261006)
@@ -508,14 +616,11 @@ def main() -> None:
     ap.add_argument("--public", type=int, default=40)
     ap.add_argument("--internal", type=int, default=30)
     ap.add_argument("--restricted", type=int, default=30)
+    ap.add_argument("--profile", choices=["v2", "v3"], default="v2")
     args = ap.parse_args()
 
-    docs, iam = build(args.seed, args.public, args.internal, args.restricted)
-    args.out.mkdir(parents=True, exist_ok=True)
-    with (args.out / "corpus.jsonl").open("w", encoding="utf-8") as fh:
-        for d in docs:
-            fh.write(json.dumps(d, ensure_ascii=False) + "\n")
-    (args.out / "iam.json").write_text(json.dumps(iam, indent=2) + "\n", encoding="utf-8")
+    docs, iam = build(args.seed, args.public, args.internal, args.restricted, profile=args.profile)
+    write(args.out, docs, iam)
     n_r = sum(d["sensitivity"] == "restricted" for d in docs)
     print(f"Wrote {len(docs)} docs ({n_r} restricted) for {len(iam['tenants'])} tenants, "
           f"{len(iam['users'])} users -> {args.out}")

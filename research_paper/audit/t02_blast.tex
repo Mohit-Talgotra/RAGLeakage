@@ -1,0 +1,16 @@
+\begin{table*}[tbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Blast radius: fraction of secrets leaked across every document the user lost
+(LM\textsubscript{all lost}), with the mean number of lost documents that leaked.}
+\label{tab:blast}
+\begin{tabular}{lccc}
+\toprule
+Re-opened & Single doc & Role & Offboarding \\
+\midrule
+index & 0.627 (0.80 docs) & 0.627 (0.80 docs) & \textbf{0.858} [0.842, 0.874] (4.76 docs) \\
+cache & 0.491 (0.64 docs) & 0.491 (0.64 docs) & \textbf{0.820} [0.804, 0.835] (4.63 docs) \\
+\bottomrule
+\end{tabular}
+\end{table*}

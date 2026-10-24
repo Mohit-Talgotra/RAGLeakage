@@ -1,0 +1,28 @@
+# Document reclassification (re-audit N5): the target's ACL loses the victim's group, so every
+# member of that group loses it. A bystander in the same group warms up on the same documents;
+# afterwards both are asked about documents they still hold. All defenses should stay at zero
+# leakage; epoch and flush wipe every affected user's sessions, taint drops only what derives
+# from the reclassified document.
+name: p4_reclassify
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  sync: periodic:86400
+  events: 40
+  revocation_type: reclassify
+  bystander: true
+  warm_restricted: 2
+  probe_retained: true
+  probe_readonly: true
+  probe_paraphrase: file
+  probe_times: [0, 3600, 86400]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+grid:
+  preset: [baseline, epoch, flush, full, full_user, full_fine]
+variants:
+  - {variant: llm_summary, summarizer: llm}
+  - {variant: extractive_summary, summarizer: extractive}

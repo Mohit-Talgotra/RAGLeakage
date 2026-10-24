@@ -1,0 +1,61 @@
+% Conference version (post-audit). IEEEtran conference mode, which matches IEEE S&P, EuroS&P,
+% NDSS and most IEEE security conferences; switch the class line for ACM (acmart, sigconf) or
+% USENIX (usenix-2020-09.sty) once the venue is chosen. The IEEE Access journal version of 19 Oct
+% is kept in _pre_audit_backup/.
+%
+% Red \pending{} markers are numbers that come from the rented-GPU runs (configs/paper/); every
+% marker is listed, with its config and analysis column, in RESULTS_TODO.md. A submission build
+% must contain none: compile with \pendingfalse to make any leftover marker an error.
+\documentclass[conference,10pt]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage[capitalise]{cleveref}
+\graphicspath{{figures/}}
+\newcommand{\LM}{\mathrm{LM}}
+\newcommand{\sys}{\textsc{Afterimage}}
+\newif\ifpending\pendingtrue
+\newcommand{\pending}[1]{\ifpending\textcolor{red}{[#1]}\else\errmessage{pending result: #1}\fi}
+\newtheorem{invariant}{Invariant}
+\newtheorem{proposition}{Proposition}
+
+\begin{document}
+
+\title{\sys: Post-Revocation Leakage and Existence Inference\\in Multi-Tenant Retrieval-Augmented Generation}
+
+\author{\IEEEauthorblockN{Mohit Talgotra\IEEEauthorrefmark{1}, Ayush Amit Govindwar\IEEEauthorrefmark{1}, Vipin Chandran\IEEEauthorrefmark{1}, and Sivaranjani A}
+\IEEEauthorblockA{School of Computer Science and Engineering, Vellore Institute of Technology, Vellore, India\\
+\{mohit.talgotra2023, ayushamit.govindwar2023, vipin.chandran2023\}@vitstudent.ac.in, sivaranjani.a@vit.ac.in}
+\IEEEauthorblockA{\IEEEauthorrefmark{1}Equal contribution.}}
+
+\maketitle
+
+\input{sections/abstract}
+\input{sections/keywords}
+
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/threat_model}
+\input{sections/defense}
+\input{sections/data}
+\input{sections/methodology}
+\input{sections/setup}
+\input{sections/results}
+\input{sections/discussion}
+\input{sections/limitations}
+\input{sections/conclusion}
+\input{sections/availability}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\appendices
+\input{sections/appendix}
+
+\end{document}

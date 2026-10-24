@@ -14,7 +14,12 @@ generations.
 Real-backend generations are cached on disk under .cache/llm/, keyed by
 hash(backend, model, temperature, messages). The cache also stores the measured
 generation latency; a cache hit sleeps that long on the shared Clock, so reruns are
-free, identical, and keep their timing shape.
+free, identical, and keep their timing shape. A replayed latency is one measurement reused,
+so identical prompts in the two twin worlds get identical timing. Timing experiments should
+run with use_cache=False (cell key llm_cache: false), which measures every call afresh.
+
+summarize() writes a rolling chat summary with the same model, in the style of LangChain's
+ConversationSummaryMemory, so real-model runs do not depend on the extractive stand-in.
 """
 
 from __future__ import annotations
@@ -46,7 +51,7 @@ DEFAULT_MODELS = {
 _STOP = set("""a an the of to in on for and or is are was were be been what which who whom how when
 where why does do did can could would should will with from by at as about that this these those it its
 there their they them our your you i me my we us any some tell give show me please summarise summarize
-details detail project""".split())
+details detail project remind told earlier figures conversation""".split())
 _WORD = re.compile(r"[a-z0-9$%.,-]+")
 _SENT = re.compile(r"(?<=[.!?])\s+")
 
@@ -61,6 +66,9 @@ class Generation:
     latency_s: float
     model: str
     cached: bool
+    # Indices of the memory items the answer was built from, when the generator can say so
+    # exactly (the stub). None: unknown, so every memory item in the prompt counts.
+    used_memory: Optional[tuple[int, ...]] = None
 
 
 @dataclass(frozen=True)
@@ -71,7 +79,7 @@ class MemoryItem:
 
 class LLMClient:
     def __init__(self, backend: str, clock: Clock, rng: random.Random, model: Optional[str] = None,
-                 temperature: float = 0.0, use_cache: bool = True) -> None:
+                 temperature: float = 0.0, use_cache: bool = True, stub_sentences: int = 4) -> None:
         if backend not in DEFAULT_MODELS:
             raise ValueError(f"unknown LLM backend {backend!r}; choose from {sorted(DEFAULT_MODELS)}")
         self.backend = backend
@@ -80,6 +88,7 @@ class LLMClient:
         self.clock = clock
         self.rng = rng
         self.use_cache = use_cache
+        self.stub_sentences = stub_sentences
         self._client = None
         if backend != "stub":
             self._client = self._connect()
@@ -111,6 +120,18 @@ class LLMClient:
         if self.backend == "stub":
             return self._stub_answer(query, docs, memory, refusal)
         return self.complete(build_messages(query, docs, memory, refusal))
+
+    def summarize(self, turns) -> str:
+        """Rolling summary of chat turns (session_memory.Turn) written by this model."""
+        if self.backend == "stub":
+            raise RuntimeError("summarizer: llm needs a real backend; the stub has the extractive summarizer")
+        transcript = "\n".join(f"{t.role}: {t.content}" for t in turns)
+        g = self.complete([
+            {"role": "system", "content": "Progressively summarize the lines of conversation provided, "
+                                          "adding onto the previous summary and returning a new summary."},
+            {"role": "user", "content": f"{transcript}\n\nNew summary:"},
+        ])
+        return g.text
 
     def complete(self, messages: list[dict]) -> Generation:
         """Raw chat completion with disk cache and timing replay."""
@@ -162,26 +183,30 @@ class LLMClient:
     def _stub_answer(self, query: str, docs: list[tuple[str, str]], memory: list[MemoryItem],
                      refusal: str) -> Generation:
         # The stub treats every document and every earlier answer as one context unit,
-        # answers from the unit that best matches the question (>= 2 shared content
-        # words), and otherwise emits the exact refusal it was instructed to use. This
-        # models an LLM that uses its whole context window, including chat history.
+        # answers from the unit that best matches the question (>= 2 shared content words,
+        # or every content word of a shorter question, such as "remind me ... about Project X"),
+        # and otherwise emits the exact refusal it was instructed to use. This models an LLM
+        # that uses its whole context window, including chat history. It returns at most
+        # stub_sentences sentences (1 = one fact per answer, so warm-up leaves facts unseen).
         q = _content_words(query)
-        units = [(f"According to {title}: ", body.removeprefix(title).strip()) for title, body in docs]
-        units += [("From our earlier conversation: ", m.content) for m in memory
+        # (prefix, body, memory index or None for a document)
+        units = [(f"According to {title}: ", body.removeprefix(title).strip(), None) for title, body in docs]
+        units += [("From our earlier conversation: ", m.content, i) for i, m in enumerate(memory)
                   if m.role != "user" and not m.content.startswith(refusal)]
-        text = refusal
+        text, used = refusal, ()
         best = max(units, key=lambda u: len(q & _content_words(u[1])), default=None)
-        if best is not None and len(q & _content_words(best[1])) >= 2:
+        if best is not None and q and len(q & _content_words(best[1])) >= min(2, len(q)):
+            used = () if best[2] is None else (best[2],)
             sents = [strip_prefixes(s) for s in _SENT.split(best[1].replace("\n", " "))]
             sents = list(dict.fromkeys(s for s in sents if s))
             ranked = sorted(range(len(sents)), key=lambda i: (
                 -(2 * len(q & _content_words(sents[i])) + 2 * any(ch.isdigit() for ch in sents[i])), i))
-            text = best[0] + " ".join(sents[i] for i in sorted(ranked[:4]))
+            text = best[0] + " ".join(sents[i] for i in sorted(ranked[:self.stub_sentences]))
         prompt_tokens = sum(len(b.split()) for _, b in docs) + sum(len(m.content.split()) for m in memory)
         out_tokens = len(text.split()) * 1.3
         latency = (0.35 + 0.015 * out_tokens + 0.0002 * prompt_tokens) * math.exp(self.rng.gauss(0.0, 0.15))
         self.clock.sleep(latency)
-        return Generation(text, latency, self.model_id, cached=False)
+        return Generation(text, latency, self.model_id, cached=False, used_memory=used)
 
 
 def build_messages(query: str, docs: list[tuple[str, str]], memory: list[MemoryItem], refusal: str) -> list[dict]:

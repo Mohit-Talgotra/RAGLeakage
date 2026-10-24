@@ -1,0 +1,26 @@
+# H9: one long session (about 50 turns over many documents), revoke one document, then ask
+# about every document the user still holds. Measures how much context each defense discards
+# and how large taint sets grow.
+name: p5_long_session
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  sync: periodic:86400
+  events: 20
+  warm_fillers: 40
+  warm_restricted: 6
+  summary_after: 16
+  keep_recent: 6
+  probe_retained: true
+  probe_readonly: true
+  probe_times: [0, 3600]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+grid:
+  preset: [baseline, epoch, flush, full, full_user, full_fine]
+variants:
+  - {variant: llm_summary, summarizer: llm}
+  - {variant: extractive_summary, summarizer: extractive}

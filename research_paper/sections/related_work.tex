@@ -1,0 +1,134 @@
+\section{Related Work}
+\label{sec:related}
+
+We organize prior work around the paper's three claims: that derived state outlives authorization
+changes, that response metadata reveals hidden documents, and that provenance-based read-time
+enforcement closes the first without opening the second. \Cref{tab:related} positions the closest
+work on the dimensions that matter here.
+
+\begin{table*}[t]
+\centering
+\caption{Closest prior work. Covers: which derived artifacts the work addresses. Per-principal:
+removal for one user while others keep access (revocation), as opposed to removal for everyone
+(deletion). Generated: handles artifacts written by a generative model, which carry no source
+identifiers. Lifetimes: measures how long a stale copy stays servable.}
+\label{tab:related}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccccccl@{}}
+\toprule
+Work & Index & Cache & Memory & Revocation & Per-principal & Generated & Lifetimes & Kind \\
+\midrule
+Zanzibar~\cite{pang2019zanzibar} & -- & authz cache & -- & yes & yes & -- & -- & mechanism \\
+Permission-aware RAG~\cite{jeong2025permissionrag}, HoneyBee~\cite{zhong2026honeybee} & yes & -- & -- & partly & yes & -- & -- & mechanism \\
+Thoth~\cite{elnikety2016thoth}, Qapla~\cite{mehta2017qapla} & yes & -- & -- & -- & yes & -- & -- & mechanism \\
+DELF~\cite{cohngordon2020delf}, K9db~\cite{albab2023k9db} & stores & stores & -- & -- & -- & -- & -- & mechanism \\
+Tavakoli and Sanderson~\cite{tavakoli2026deletion} & yes & -- & -- & -- & -- & -- & -- & measurement \\
+FIDES~\cite{costa2026fides}, CaMeL~\cite{debenedetti2025camel} & -- & -- & agent state & -- & -- & yes & -- & mechanism \\
+MEXTRA~\cite{wang2025mextra} & -- & -- & yes & -- & -- & yes & -- & attack \\
+SAAM~\cite{crampton2006saam}, recycling~\cite{wei2009recycling} & -- & authz cache & -- & policy change & yes & -- & -- & mechanism \\
+Liu et al.~\cite{liu2015revocation} (web PKI) & -- & CRL/OCSP & -- & yes & -- & -- & yes & measurement \\
+\textbf{This work} & yes & yes & yes & yes & yes & yes & yes & measurement + comparison \\
+\bottomrule
+\end{tabular}}
+\end{table*}
+
+\subsection{Derived state outlives authorization changes}
+\paragraph{Access control for search and retrieval.}
+Document-level security in enterprise search predates RAG. Bailey et al.\ compare copying
+permissions into the index with checking each result at query time~\cite{bailey2006secure};
+fine-grained access control by query rewriting is the database analogue~\cite{rizvi2004query}. RAG
+systems filter retrieval with permissions derived from an IAM system~\cite{jeong2025permissionrag},
+for sensitive patient data~\cite{chen2025integrating}, or with dynamically partitioned vector
+indexes for role-based filtering~\cite{zhong2026honeybee}; products expose the same pattern as
+metadata filters~\cite{doc_azure_trimming,doc_qdrant,doc_pinecone,doc_chroma}. Filtered
+nearest-neighbor search treats the pre- versus post-filter choice as an efficiency
+problem~\cite{gollapudi2023filtered,patel2024acorn}; we show it is also a security choice. A
+materialized ACL copy is a materialized view, stale for as long as its maintenance
+lags~\cite{gupta1995views}. None of these designs addresses artifacts derived before a permission
+changed.
+
+\paragraph{Revocation and stale authorization.}
+Complete mediation requires every access to be checked against current
+authority~\cite{saltzer1975protection}. Revocation is an old problem for capabilities, where
+selective revocation needs indirection~\cite{redell1974selective}, and for cryptographic file
+systems, where \emph{lazy revocation} defers re-encryption until the next
+write~\cite{kallahalla2003plutus,backes2005lazy}; our read-time check is the opposite trade-off,
+paying on every read so that no stale copy is served. Secondary and approximate authorization
+models cache and infer decisions for availability and must bound how stale they
+are~\cite{crampton2006saam,wei2009recycling}. Zanzibar binds checks to consistency tokens to avoid
+the ``new enemy'' problem~\cite{pang2019zanzibar}; our artifacts are derived \emph{before} the
+revocation and re-served after it with no intervening write. Measurement work on certificate
+revocation~\cite{liu2015revocation} is the methodological template for measuring how long a revoked
+credential stays usable; we apply that view to RAG artifacts.
+
+\paragraph{Deletion, unlearning and derived data.}
+A system must forget data together with everything computed from it~\cite{cao2015towards}, formally
+captured by deletion-compliance definitions~\cite{garg2020formalizing}. DELF makes cascading deletion
+first-class at Facebook and reports that developers routinely omit derived-data deletions: before
+enforcement they handled deletion for only 20\% of new edge types~\cite{cohngordon2020delf}. K9db and
+Edna build compliant deletion and disguising into web-application storage~\cite{albab2023k9db,tsai2023edna},
+and GDPR compliance has measurable cost in databases~\cite{shastri2020gdpr}. Unlearning removes data
+from trained models~\cite{bourtoule2021machine} and, for RAG, from the knowledge
+base~\cite{wang2024unlearningrag}; Tavakoli and Sanderson audit whether RAG systems forget deleted
+material~\cite{tavakoli2026deletion}. Revocation differs from deletion in the way that matters for
+derived state: the document stays available to other principals, so a derived copy must be
+filtered per principal on every read rather than removed.
+
+\paragraph{Chat memory.}
+LLM applications keep conversation state as recent turns plus a rolling summary written by the
+model~\cite{wang2023recursively,doc_langchain_summary,doc_llamaindex_memory}, or as managed long-term
+memory~\cite{packer2023memgpt,park2023generative,zhong2024memorybank}. Memory can be extracted by a
+crafted query~\cite{wang2025mextra}. No prior work we found asks what memory serves after the user's
+permissions change, which is where our measurements find the longest-lived leaks.
+
+\subsection{Metadata reveals hidden documents}
+Statistics computed over documents a user cannot read leak information about them: under a
+system-wide index with post-filtering, an unprivileged user recovers collection statistics from
+relevance scores~\cite{buttcher2005security}. Cross-site search attacks infer the existence of private
+records from search timing~\cite{gelernter2015xs}, and web applications leak state through response
+size and timing~\cite{chen2010sidechannel,bortz2007exposing,felten2000timing}. In LLM serving, prompt
+and KV caches create timing channels~\cite{gu2025auditing,song2025earlybird,wu2025know,zheng2024inputsnatch},
+speculative and efficient inference leaks through timing~\cite{carlini2024remote}, token lengths leak
+encrypted responses~\cite{weiss2024what}, and semantic caches are vulnerable to key
+collisions~\cite{zhang2026keycollision,afiffy2026semanticcache} and motivate user-scoped
+designs~\cite{gill2024meancache}. Membership inference against the RAG datastore uses the generated
+answer~\cite{anderson2025my,li2024generating,naseh2025riddle,liu2025mask}, and extraction attacks
+recover datastore content~\cite{zeng2024good,qi2025follow,dimaio2024pirates}; embeddings themselves
+can be inverted~\cite{morris2023embeddings}. Defenses include differentially private
+retrieval~\cite{koga2024dprag} and synthetic datastores~\cite{zeng2024sage}. Those attacks target a
+datastore the model can retrieve from. Our attacker cannot retrieve the target at all and asks
+whether metadata or shared state betrays it; we report insiders and outsiders separately because
+shared caches give the two very different power, and we use the low-false-positive operating point
+of Carlini et al.~\cite{carlini2022mia}.
+
+\subsection{Provenance-based read-time enforcement}
+Provenance-tainted revocation is dynamic information-flow tracking~\cite{myers1997decentralized,sabelfeld2003language};
+operating systems~\cite{zeldovich2006making,krohn2007information} and applications~\cite{yip2009improving,enck2010taintdroid}
+attach labels to data and propagate them through computation, and provenance-based access control
+names the model in which decisions depend on derivation history~\cite{park2012pbac,buneman2001why}.
+Thoth enforces declarative policies on derived data inside a Lucene-based retrieval system, with a
+per-task taint set~\cite{elnikety2016thoth}; Qapla enforces policies on database queries without
+trusting the application~\cite{mehta2017qapla}. For LLM systems, information-flow control now spans
+agent planners~\cite{costa2026fides,debenedetti2025camel,wu2024fsecure,zhong2025rtbas}, isolation
+architectures~\cite{wu2025isolategpt}, contextual-integrity agents~\cite{bagdasarian2024airgap},
+access control over model parameters~\cite{tiwari2024ifc,jayaraman2025permissioned}, and permissive
+analyses that reduce over-tainting by asking which inputs actually influenced an
+output~\cite{siddiqui2024permissive}; context attribution~\cite{cohenwang2024contextcite} is the
+corresponding tool. These works establish the mechanism. Two things differ here. Our unit of taint
+is the persistent artifact (a cache entry, a memory turn, a summary sentence) rather than a task or
+a plan, and our question is what the mechanism costs compared with coarser invalidation, measured
+on in-session utility. The usual limit of information-flow control, that a principal who read data
+can re-type it, also bounds our defense, and we measure it.
+
+\paragraph{Search protocol.}
+On 14 October 2026 we ran 21 targeted queries through general web search, the OpenAlex and Crossref
+APIs, and publisher and proceedings pages (ACM DL, IEEE Xplore, USENIX, Springer, PMLR, NeurIPS). The
+queries covered permission-aware and multi-tenant RAG, RAG unlearning and deletion, stale authorization
+and revocation in distributed systems, information-flow control for LLM agents, chat-memory privacy,
+semantic-cache and KV-cache side channels, relevance-score leakage in multi-user search, backward-private
+searchable encryption and revocable encryption, and a direct sweep for post-revocation leakage in RAG.
+The search was targeted rather than systematic; work on agent memory, authorization caching, filtered
+vector search and semantic caches was added afterwards from the authors' knowledge of these areas. We
+found no peer-reviewed work that measures post-revocation leakage per derived artifact in a RAG pipeline.

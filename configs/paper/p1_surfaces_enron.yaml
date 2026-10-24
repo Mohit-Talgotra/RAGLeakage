@@ -1,0 +1,22 @@
+# RQ1 on real text (Enron with canaries), same procedure as p1_surfaces.
+name: p1_surfaces_enron
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: enron_c
+  preset: full
+  sync: periodic:86400
+  events: 40
+  warm_restricted: 2
+  probe_readonly: true
+  probe_unseen: true
+  probe_paraphrase: file
+  probe_times: [0, 600, 3600, 14400, 43200, 86400, 172800]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  summarizer: llm
+grid:
+  open_surface: [none, index, cache, memory]
+  revocation_type: [single_doc, role]

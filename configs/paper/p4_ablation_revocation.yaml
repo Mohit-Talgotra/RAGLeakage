@@ -1,0 +1,25 @@
+# RQ4: leave-one-out from full, plus the one-hop summary variant (summary carries its turns'
+# document IDs but answers do not inherit memory taint) that separates the two halves of
+# "transitive taint" (audit A3 / C6).
+name: p4_ablation_revocation
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  preset: full
+  sync: event:0.05:86400
+  events: 40
+  probe_readonly: true
+  probe_unseen: true
+  probe_paraphrase: file
+  probe_times: [0, 600, 3600, 14400, 43200, 64800, 86400, 172800]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  summarizer: llm
+grid:
+  ablate: [none, live_acl_check, cache_evict, cache_lazy_check, memory_purge, memory_lazy_check, taint_transitive]
+variants:
+  - {variant: as_is}
+  - {variant: one_hop_summary, summary_taint_union: true}

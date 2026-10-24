@@ -1,0 +1,154 @@
+% Staged additions from the Phase 0 literature audit (2026-10-14).
+% NOT merged into references.bib — the existing bibliography was left untouched.
+% Every entry below was verified against the publisher's own record; fields that
+% could not be confirmed are omitted rather than guessed.
+% See verification_report.md for the per-entry verification trail.
+
+% ---- Verified, recommended for inclusion ----
+
+% Theme 3. The strongest prior art to the proposed defense: policy propagation
+% through derived data inside a data retrieval system (Lucene prototype).
+% Verified: usenix.org/conference/usenixsecurity16/technical-sessions/presentation/elnikety
+@inproceedings{elnikety2016thoth,
+  author    = {Eslam Elnikety and Aastha Mehta and Anjo Vahldiek-Oberwagner and Deepak Garg and Peter Druschel},
+  title     = {Thoth: Comprehensive Policy Compliance in Data Retrieval Systems},
+  booktitle = {25th USENIX Security Symposium (USENIX Security 16)},
+  pages     = {637--654},
+  publisher = {USENIX Association},
+  year      = {2016}
+}
+
+% Theme 4. Deployed derived-data deletion propagation; its annotation-
+% incompleteness finding is empirical support for read-time checking.
+% Verified: usenix.org/conference/usenixsecurity20/presentation/cohn-gordon
+% Page range not published on the USENIX landing page; omitted deliberately.
+@inproceedings{cohngordon2020delf,
+  author    = {Katriel Cohn-Gordon and Georgios Damaskinos and Divino Neto and Joshi Cordova and Beno{\^i}t Reitz and Benjamin Strahs and Daniel Obenshain and Paul Pearce and Ioannis Papagiannis},
+  title     = {{DELF}: Safeguarding Deletion Correctness in Online Social Networks},
+  booktitle = {29th USENIX Security Symposium (USENIX Security 20)},
+  publisher = {USENIX Association},
+  year      = {2020}
+}
+
+% Theme 2. Policy enforcement below the application layer; the canonical
+% statement of "do not trust the application to filter".
+% Verified: usenix.org/conference/usenixsecurity17/technical-sessions/presentation/mehta
+@inproceedings{mehta2017qapla,
+  author    = {Aastha Mehta and Eslam Elnikety and Katura Harvey and Deepak Garg and Peter Druschel},
+  title     = {Qapla: Policy Compliance for Database-Backed Systems},
+  booktitle = {26th USENIX Security Symposium (USENIX Security 17)},
+  publisher = {USENIX Association},
+  year      = {2017}
+}
+
+% Theme 3. Information-flow control for LLM systems, with a formal planner model.
+% Verified accepted: neurips.cc/virtual/2026/poster/152696 (poster, 10 Dec 2026).
+% Proceedings volume/pages not yet assignable; omitted.
+@inproceedings{costa2026fides,
+  author    = {Manuel Costa and Boris K{\"o}pf and Aashish Kolluri and Andrew Paverd and Mark Russinovich and Ahmed Salem and Shruti Tople and Lukas Wutschitz and Santiago Zanella-B{\'e}guelin},
+  title     = {Securing {AI} Agents with Information-Flow Control},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2026}
+}
+
+% ---- Conditional: do not cite until the author confirms the venue from IEEE ----
+%
+% "When Machine Unlearning Meets Retrieval-Augmented Generation (RAG):
+%  Keep Secret or Forget Knowledge?"
+% The paper is real (arXiv 2410.15267; IEEE Computer Society Digital Library
+% record at csdl/journal/tq/2026/02/11207222, i.e. a 2026 issue-2 IEEE
+% Transactions). Journal name, volume, page range, DOI and the full author list
+% could NOT be verified this pass -- the CSDL page is JS-rendered and returns no
+% text, and no DOI was recoverable from any accessible record.
+% ACTION: confirm on IEEE Xplore, then add. No stub entry is provided here on
+% purpose, so that nothing unverified can be cited by accident.
+
+% ---- Optional, non-journal; include only if the cache-timing claim needs it ----
+%
+% Verified: link.springer.com/chapter/10.1007/978-981-92-4805-6_32
+% Rationale for a non-journal source: it is the cache-sharing timing channel in
+% LLM serving measured end-to-end, which is the closest published analogue to
+% threat T6 combined with T2. The existing timing references
+% (gu2025auditing, song2025earlybird, wu2025know) already carry the claim, so
+% this is additive, not required.
+% NOTE: the Springer page's online date is 2026-08-24 but its citation/copyright
+% line says 2027. Resolve the year before citing.
+@inproceedings{zheng2026inputsnatch,
+  author    = {Xinyao Zheng and Husheng Han and Shangyi Shi and Qiyan Fang and Zidong Du and Xing Hu and Qi Guo},
+  title     = {{InputSnatch}: Stealing Input in {LLM} Services via Cache-Sharing Timing Side-Channel Attacks},
+  booktitle = {Advanced Parallel Processing Technologies (APPT 2026)},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {16693},
+  pages     = {483--497},
+  publisher = {Springer},
+  address   = {Singapore},
+  year      = {2026},
+  doi       = {10.1007/978-981-92-4805-6_32},
+  note      = {Author list may be incomplete: the publisher page truncates it before the final author. Verify before citing.}
+}
+
+
+% ---- Missing references found by the citation-support audit ----
+
+% Theme 1/6. Peer-reviewed JOURNAL paper directly on the public/private data
+% split in retrieval-based systems - the manuscript's problem setting.
+% Surfaced while resolving the uncited EnronQA footnote in methodology.tex.
+% Verified: aclanthology.org/2023.tacl-1.51 (TACL 11, 902-921).
+@article{arora2023reasoning,
+  author  = {Simran Arora and Patrick Lewis and Angela Fan and Jacob Kahn and Christopher R{\'e}},
+  title   = {Reasoning over Public and Private Data in Retrieval-Based Systems},
+  journal = {Transactions of the Association for Computational Linguistics},
+  volume  = {11},
+  pages   = {902--921},
+  year    = {2023},
+  doi     = {10.1162/tacl_a_00580}
+}
+
+% methodology.tex uses the EnronQA benchmark for the real-text track but cites it
+% only as a footnote URL to a HuggingFace dataset, with no bibliography entry.
+% No peer-reviewed venue was found, so it stays out of the journal-tier set -
+% but a benchmark the real-text track depends on needs a traceable citation.
+% Rationale for a non-peer-reviewed source: it is the original specification of
+% the benchmark actually used, and nothing equivalent is published.
+@misc{ryan2025enronqa,
+  author       = {Michael J. Ryan and Danmei Xu and Chris Nivera and Daniel Campos},
+  title        = {{EnronQA}: Towards Personalized {RAG} over Private Documents},
+  year         = {2025},
+  eprint       = {2505.00263},
+  archivePrefix= {arXiv},
+  primaryClass = {cs.CL},
+  note         = {Author list taken from the arXiv record; verify before citing}
+}
+
+% ---- Corrections to EXISTING entries (recommended; not applied) ----
+% See verification_report.md. Summary of the patch, for convenience:
+%
+% sandhu1996rbac        journal = {Computer}      (not "IEEE Computer")
+%                       doi     = {10.1109/2.485845}
+% wang2025unique        author  ... and Yu, Philip S.}   (was "Yu, P.")
+%                       pages   = {1--36}
+% jeong2025permissionrag doi    = {10.1109/ACCESS.2025.3628960}
+% liu2025mask           pages   = {2894--2907}
+% qi2025follow          pages   = {48733--48755}      [expansion-30 group]
+% zeldovich2006making   pages   = {263--278}          [optional; expansion-30]
+% bodea2026sok          drop the "Accepted; preprint" note -- confirmed on the
+%                       SaTML 2026 accepted-papers list (TU Munich, 23-25 Mar 2026)
+% song2025earlybird     UNRESOLVED: volume/issue/pages/doi. Likely early access.
+%
+% ---- Citation-level fixes (see citation_support_audit.md; no metadata change) ----
+% pang2019zanzibar      related_work.tex misdefines the "new enemy problem".
+%                       Zanzibar 2.2 gives TWO cases (ACL update ordering; old
+%                       ACL applied to new content), both involving writes AFTER
+%                       the revocation. This paper's case - an artifact derived
+%                       BEFORE revocation, re-served after - is neither. Reword.
+% zhong2026honeybee     methodology.tex says it "behaves like baseline".
+%                       HoneyBee 5.2 handles permission updates INCREMENTALLY and
+%                       7.4 benchmarks them. Re-scope to: no analysis of the
+%                       change-to-update interval, and nothing outside the index.
+% buttcher2005security  related_work.tex UNDERSTATES it. FAST'05 section 5 shows
+%                       score/rank recovery of collection statistics by an
+%                       unprivileged querier, and its "query integration" fix IS
+%                       the ACL pre-filter. Also cite it in defense.tex.
+% bailey2006secure      WITHDRAWN. dblp and a second index give pages 493-502,
+%                       a ten-page CIKM full paper. The sentence stands as
+%                       written. pages = {493--502} added to the entry.

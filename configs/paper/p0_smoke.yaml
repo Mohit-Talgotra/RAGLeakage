@@ -1,0 +1,24 @@
+# Two-minute check of every new switch on the stub, before renting a GPU.
+name: p0_smoke
+experiment: revocation
+seeds: 1
+base:
+  embedder: hash
+  reranker: overlap
+  min_relevance: 0.15
+  corpus: synthetic_v3@seed
+  sync: periodic:86400
+  events: 3
+  warm_restricted: 2
+  probe_retained: true
+  probe_readonly: true
+  probe_unseen: true
+  update_after_revoke: true
+  colleague_unseen: true
+  bystander: true
+  hook_drop: 0.5
+  probe_times: [0, 3600, 86400]
+  llm_backend: stub
+grid:
+  preset: [baseline, baseline_shared, epoch, flush, full, full_user, full_fine]
+  revocation_type: [single_doc, mover, reclassify]

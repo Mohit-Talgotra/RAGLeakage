@@ -1,0 +1,18 @@
+\begin{table*}[tbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{Stub generator vs.\ a real LLM (Qwen2.5-3B-Instruct, Ollama) on the same 100 revocation
+events (daily crawl). Paired difference (baseline): $+0.097$ [0.032, 0.169], $p=0.004$.}
+\label{tab:realllm}
+\begin{tabular}{llccc}
+\toprule
+Preset & Generator & LM & LM\textsubscript{memory} & Leaking at 48\,h \\
+\midrule
+baseline & stub & 0.646 [0.584, 0.702] & 0.305 & 38\% \\
+baseline & Qwen2.5-3B & 0.743 [0.711, 0.771] & 0.715 & 96\% \\
+full & stub & 0.000 & 0.000 & 0\% \\
+full & Qwen2.5-3B & 0.000 & 0.000 & 0\% \\
+\bottomrule
+\end{tabular}
+\end{table*}
