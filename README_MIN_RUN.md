@@ -30,11 +30,9 @@ pilot step tells you how long it will really take on your machine. Nothing here 
 
 ## 2. Data
 
-`data/enron_c/` (Enron with canaries, about 2 MB) is gitignored. Copy the folder from the machine that
-built it into `data\enron_c\` (it holds `corpus.jsonl` and `iam.json`). Rebuilding it needs the
-EnronQA snapshot and pyarrow (`scripts/build_enron_corpus.py --canaries --out data/enron_c`).
-Optionally copy `.cache\embeddings\` too, which saves encoding the corpus on first use. The first run
-downloads the MiniLM encoder and cross-encoder from Hugging Face, so it needs internet once.
+`data/enron_c/` (Enron with canaries, about 2 MB: `corpus.jsonl` and `iam.json`) is committed, so the
+clone already has it; nothing to copy. The first run encodes the corpus (cached in `.cache\embeddings\`)
+and downloads the MiniLM encoder and cross-encoder from Hugging Face, so it needs internet once.
 
 ## 3. Run
 

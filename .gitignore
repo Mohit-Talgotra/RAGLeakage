@@ -37,6 +37,7 @@ research_paper/literature_review/pre_edit_backup/
 
 # Generated corpora (rebuild with scripts/generate_corpus.py --profile v3, build_enron_corpus.py).
 data/enron*/
+!data/enron_c/
 data/synthetic_v3*/
 research_paper/_pre_audit_backup/
 

@@ -1,0 +1,538 @@
+{
+  "tenants": [
+    {
+      "tenant_id": "e1",
+      "name": "Enron desk 1",
+      "industry": "energy",
+      "hq": "Houston, TX"
+    },
+    {
+      "tenant_id": "e2",
+      "name": "Enron desk 2",
+      "industry": "energy",
+      "hq": "Houston, TX"
+    },
+    {
+      "tenant_id": "e3",
+      "name": "Enron desk 3",
+      "industry": "energy",
+      "hq": "Houston, TX"
+    },
+    {
+      "tenant_id": "e4",
+      "name": "Enron desk 4",
+      "industry": "energy",
+      "hq": "Houston, TX"
+    },
+    {
+      "tenant_id": "e5",
+      "name": "Enron desk 5",
+      "industry": "energy",
+      "hq": "Houston, TX"
+    }
+  ],
+  "users": [
+    {
+      "user_id": "e1_beck",
+      "tenant_id": "e1",
+      "role": "employee",
+      "groups": [
+        "e1_all",
+        "e1_beck_inbox",
+        "e1_staff"
+      ]
+    },
+    {
+      "user_id": "e1_beck_asst",
+      "tenant_id": "e1",
+      "role": "employee",
+      "groups": [
+        "e1_all",
+        "e1_beck_inbox",
+        "e1_staff"
+      ]
+    },
+    {
+      "user_id": "e1_corman",
+      "tenant_id": "e1",
+      "role": "employee",
+      "groups": [
+        "e1_all",
+        "e1_corman_inbox",
+        "e1_staff"
+      ]
+    },
+    {
+      "user_id": "e1_corman_asst",
+      "tenant_id": "e1",
+      "role": "employee",
+      "groups": [
+        "e1_all",
+        "e1_corman_inbox",
+        "e1_staff"
+      ]
+    },
+    {
+      "user_id": "e1_colleague1",
+      "tenant_id": "e1",
+      "role": "employee",
+      "groups": [
+        "e1_all",
+        "e1_staff"
+      ]
+    },
+    {
+      "user_id": "e1_colleague2",
+      "tenant_id": "e1",
+      "role": "employee",
+      "groups": [
+        "e1_all",
+        "e1_staff"
+      ]
+    },
+    {
+      "user_id": "e1_contractor1",
+      "tenant_id": "e1",
+      "role": "contractor",
+      "groups": [
+        "e1_all"
+      ]
+    },
+    {
+      "user_id": "e1_contractor2",
+      "tenant_id": "e1",
+      "role": "contractor",
+      "groups": [
+        "e1_all"
+      ]
+    },
+    {
+      "user_id": "e2_dorland",
+      "tenant_id": "e2",
+      "role": "employee",
+      "groups": [
+        "e2_all",
+        "e2_dorland_inbox",
+        "e2_staff"
+      ]
+    },
+    {
+      "user_id": "e2_dorland_asst",
+      "tenant_id": "e2",
+      "role": "employee",
+      "groups": [
+        "e2_all",
+        "e2_dorland_inbox",
+        "e2_staff"
+      ]
+    },
+    {
+      "user_id": "e2_giron",
+      "tenant_id": "e2",
+      "role": "employee",
+      "groups": [
+        "e2_all",
+        "e2_giron_inbox",
+        "e2_staff"
+      ]
+    },
+    {
+      "user_id": "e2_giron_asst",
+      "tenant_id": "e2",
+      "role": "employee",
+      "groups": [
+        "e2_all",
+        "e2_giron_inbox",
+        "e2_staff"
+      ]
+    },
+    {
+      "user_id": "e2_colleague1",
+      "tenant_id": "e2",
+      "role": "employee",
+      "groups": [
+        "e2_all",
+        "e2_staff"
+      ]
+    },
+    {
+      "user_id": "e2_colleague2",
+      "tenant_id": "e2",
+      "role": "employee",
+      "groups": [
+        "e2_all",
+        "e2_staff"
+      ]
+    },
+    {
+      "user_id": "e2_contractor1",
+      "tenant_id": "e2",
+      "role": "contractor",
+      "groups": [
+        "e2_all"
+      ]
+    },
+    {
+      "user_id": "e2_contractor2",
+      "tenant_id": "e2",
+      "role": "contractor",
+      "groups": [
+        "e2_all"
+      ]
+    },
+    {
+      "user_id": "e3_guzman",
+      "tenant_id": "e3",
+      "role": "employee",
+      "groups": [
+        "e3_all",
+        "e3_guzman_inbox",
+        "e3_staff"
+      ]
+    },
+    {
+      "user_id": "e3_guzman_asst",
+      "tenant_id": "e3",
+      "role": "employee",
+      "groups": [
+        "e3_all",
+        "e3_guzman_inbox",
+        "e3_staff"
+      ]
+    },
+    {
+      "user_id": "e3_hernandez",
+      "tenant_id": "e3",
+      "role": "employee",
+      "groups": [
+        "e3_all",
+        "e3_hernandez_inbox",
+        "e3_staff"
+      ]
+    },
+    {
+      "user_id": "e3_hernandez_asst",
+      "tenant_id": "e3",
+      "role": "employee",
+      "groups": [
+        "e3_all",
+        "e3_hernandez_inbox",
+        "e3_staff"
+      ]
+    },
+    {
+      "user_id": "e3_colleague1",
+      "tenant_id": "e3",
+      "role": "employee",
+      "groups": [
+        "e3_all",
+        "e3_staff"
+      ]
+    },
+    {
+      "user_id": "e3_colleague2",
+      "tenant_id": "e3",
+      "role": "employee",
+      "groups": [
+        "e3_all",
+        "e3_staff"
+      ]
+    },
+    {
+      "user_id": "e3_contractor1",
+      "tenant_id": "e3",
+      "role": "contractor",
+      "groups": [
+        "e3_all"
+      ]
+    },
+    {
+      "user_id": "e3_contractor2",
+      "tenant_id": "e3",
+      "role": "contractor",
+      "groups": [
+        "e3_all"
+      ]
+    },
+    {
+      "user_id": "e4_horton",
+      "tenant_id": "e4",
+      "role": "employee",
+      "groups": [
+        "e4_all",
+        "e4_horton_inbox",
+        "e4_staff"
+      ]
+    },
+    {
+      "user_id": "e4_horton_asst",
+      "tenant_id": "e4",
+      "role": "employee",
+      "groups": [
+        "e4_all",
+        "e4_horton_inbox",
+        "e4_staff"
+      ]
+    },
+    {
+      "user_id": "e4_hyvl",
+      "tenant_id": "e4",
+      "role": "employee",
+      "groups": [
+        "e4_all",
+        "e4_hyvl_inbox",
+        "e4_staff"
+      ]
+    },
+    {
+      "user_id": "e4_hyvl_asst",
+      "tenant_id": "e4",
+      "role": "employee",
+      "groups": [
+        "e4_all",
+        "e4_hyvl_inbox",
+        "e4_staff"
+      ]
+    },
+    {
+      "user_id": "e4_colleague1",
+      "tenant_id": "e4",
+      "role": "employee",
+      "groups": [
+        "e4_all",
+        "e4_staff"
+      ]
+    },
+    {
+      "user_id": "e4_colleague2",
+      "tenant_id": "e4",
+      "role": "employee",
+      "groups": [
+        "e4_all",
+        "e4_staff"
+      ]
+    },
+    {
+      "user_id": "e4_contractor1",
+      "tenant_id": "e4",
+      "role": "contractor",
+      "groups": [
+        "e4_all"
+      ]
+    },
+    {
+      "user_id": "e4_contractor2",
+      "tenant_id": "e4",
+      "role": "contractor",
+      "groups": [
+        "e4_all"
+      ]
+    },
+    {
+      "user_id": "e5_mccarty",
+      "tenant_id": "e5",
+      "role": "employee",
+      "groups": [
+        "e5_all",
+        "e5_mccarty_inbox",
+        "e5_staff"
+      ]
+    },
+    {
+      "user_id": "e5_mccarty_asst",
+      "tenant_id": "e5",
+      "role": "employee",
+      "groups": [
+        "e5_all",
+        "e5_mccarty_inbox",
+        "e5_staff"
+      ]
+    },
+    {
+      "user_id": "e5_stokley",
+      "tenant_id": "e5",
+      "role": "employee",
+      "groups": [
+        "e5_all",
+        "e5_staff",
+        "e5_stokley_inbox"
+      ]
+    },
+    {
+      "user_id": "e5_stokley_asst",
+      "tenant_id": "e5",
+      "role": "employee",
+      "groups": [
+        "e5_all",
+        "e5_staff",
+        "e5_stokley_inbox"
+      ]
+    },
+    {
+      "user_id": "e5_colleague1",
+      "tenant_id": "e5",
+      "role": "employee",
+      "groups": [
+        "e5_all",
+        "e5_staff"
+      ]
+    },
+    {
+      "user_id": "e5_colleague2",
+      "tenant_id": "e5",
+      "role": "employee",
+      "groups": [
+        "e5_all",
+        "e5_staff"
+      ]
+    },
+    {
+      "user_id": "e5_contractor1",
+      "tenant_id": "e5",
+      "role": "contractor",
+      "groups": [
+        "e5_all"
+      ]
+    },
+    {
+      "user_id": "e5_contractor2",
+      "tenant_id": "e5",
+      "role": "contractor",
+      "groups": [
+        "e5_all"
+      ]
+    }
+  ],
+  "groups": {
+    "e1_beck_inbox": [
+      "e1_beck",
+      "e1_beck_asst"
+    ],
+    "e1_corman_inbox": [
+      "e1_corman",
+      "e1_corman_asst"
+    ],
+    "e1_all": [
+      "e1_beck",
+      "e1_beck_asst",
+      "e1_corman",
+      "e1_corman_asst",
+      "e1_colleague1",
+      "e1_colleague2",
+      "e1_contractor1",
+      "e1_contractor2"
+    ],
+    "e1_staff": [
+      "e1_beck",
+      "e1_beck_asst",
+      "e1_corman",
+      "e1_corman_asst",
+      "e1_colleague1",
+      "e1_colleague2"
+    ],
+    "e2_dorland_inbox": [
+      "e2_dorland",
+      "e2_dorland_asst"
+    ],
+    "e2_giron_inbox": [
+      "e2_giron",
+      "e2_giron_asst"
+    ],
+    "e2_all": [
+      "e2_dorland",
+      "e2_dorland_asst",
+      "e2_giron",
+      "e2_giron_asst",
+      "e2_colleague1",
+      "e2_colleague2",
+      "e2_contractor1",
+      "e2_contractor2"
+    ],
+    "e2_staff": [
+      "e2_dorland",
+      "e2_dorland_asst",
+      "e2_giron",
+      "e2_giron_asst",
+      "e2_colleague1",
+      "e2_colleague2"
+    ],
+    "e3_guzman_inbox": [
+      "e3_guzman",
+      "e3_guzman_asst"
+    ],
+    "e3_hernandez_inbox": [
+      "e3_hernandez",
+      "e3_hernandez_asst"
+    ],
+    "e3_all": [
+      "e3_guzman",
+      "e3_guzman_asst",
+      "e3_hernandez",
+      "e3_hernandez_asst",
+      "e3_colleague1",
+      "e3_colleague2",
+      "e3_contractor1",
+      "e3_contractor2"
+    ],
+    "e3_staff": [
+      "e3_guzman",
+      "e3_guzman_asst",
+      "e3_hernandez",
+      "e3_hernandez_asst",
+      "e3_colleague1",
+      "e3_colleague2"
+    ],
+    "e4_horton_inbox": [
+      "e4_horton",
+      "e4_horton_asst"
+    ],
+    "e4_hyvl_inbox": [
+      "e4_hyvl",
+      "e4_hyvl_asst"
+    ],
+    "e4_all": [
+      "e4_horton",
+      "e4_horton_asst",
+      "e4_hyvl",
+      "e4_hyvl_asst",
+      "e4_colleague1",
+      "e4_colleague2",
+      "e4_contractor1",
+      "e4_contractor2"
+    ],
+    "e4_staff": [
+      "e4_horton",
+      "e4_horton_asst",
+      "e4_hyvl",
+      "e4_hyvl_asst",
+      "e4_colleague1",
+      "e4_colleague2"
+    ],
+    "e5_mccarty_inbox": [
+      "e5_mccarty",
+      "e5_mccarty_asst"
+    ],
+    "e5_stokley_inbox": [
+      "e5_stokley",
+      "e5_stokley_asst"
+    ],
+    "e5_all": [
+      "e5_mccarty",
+      "e5_mccarty_asst",
+      "e5_stokley",
+      "e5_stokley_asst",
+      "e5_colleague1",
+      "e5_colleague2",
+      "e5_contractor1",
+      "e5_contractor2"
+    ],
+    "e5_staff": [
+      "e5_mccarty",
+      "e5_mccarty_asst",
+      "e5_stokley",
+      "e5_stokley_asst",
+      "e5_colleague1",
+      "e5_colleague2"
+    ]
+  }
+}
