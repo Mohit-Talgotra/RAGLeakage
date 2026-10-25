@@ -327,6 +327,8 @@ def run_revocation(pipe: RAGPipeline, client: Client, cell: dict, rng: random.Ra
         clock.advance(gap)
         t_rev = clock.now()
         _revoke(pipe, kind, victim, target)
+        tags["hooks_dropped"] = pipe.acm.dropped_hooks
+        tags["index_events_dropped"] = pipe.index.dropped_events
         tags["revoke_gap_s"] = gap
         tags["lost_docs"] = [d for d in (tid, *(f for f, _ in fillers)) if not pipe.acm.has_access(victim, d)]
         lost_fillers = [(d, q) for d, q in fillers if d in tags["lost_docs"]]

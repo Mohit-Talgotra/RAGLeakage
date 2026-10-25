@@ -4,16 +4,13 @@ document content into derived artifacts: ACL copies in the vector index, semanti
 and chat memory with model-written summaries. Revoking a user's access in the identity system does
 not revoke these copies. We measure what they disclose after revocation, separating secrets the user
 had already been shown (re-disclosure, a violation of complete mediation) from secrets the user had
-never seen, including content of a document that changed after the revocation. With real models
-from \pending{3B to 32B} on generated and real (Enron) corpora, \pending{first result sentence:
-new disclosure under baseline and through which path (stale index, shared cache), written from
-p4\_defenses and p4\_shared\_state}; \pending{memory lifetime under session retention, from
-p2\_lifetimes}. Two published retrieval-time enforcement designs remove the index channel
-and leave \pending{Y} of the leakage. We then compare read-time defenses for derived state:
-provenance taint, a per-user permission epoch, and session flush. \pending{defense result: which
-reach zero leakage, including with lost revocation hooks and document reclassification, and what
-each costs the revoked user and bystanders; name the summary design (model-written or extractive)
-for any sentence-level-taint claim}. \pending{existence result from p3\_existence, insider and
-outsider}. A user who pastes back what they once received defeats every
-artifact-level defense, and we measure how far that reaches.
+never seen. On real Enron e-mail with Llama-3.1-8B (4-bit, served locally), \pending{first result
+sentence: leakage and new disclosure under baseline, and through which artifact, from p\_min\_enron}.
+A published retrieval-time enforcement design removes the index channel and leaves \pending{Y} of the
+leakage. We then compare read-time defenses for derived state, provenance taint and a per-user
+permission epoch: \pending{defense result from p\_min\_enron: whether each reaches zero leakage and
+what it costs the revoked user on documents it still holds}. In an unmodified LangChain, Chroma and
+RedisVL deployment, a per-user semantic cache and agent memory both disclosed revoked e-mail although
+retrieval refused it. A user who pastes back what they once received defeats every artifact-level
+defense.
 \end{abstract}

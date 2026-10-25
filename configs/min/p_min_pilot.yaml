@@ -1,0 +1,22 @@
+# Timing check for p_min_enron: same cells, 2 seeds x 1 event. run_min_grid.py pilot prints the
+# mean seconds per model call from these logs.
+name: p_min_pilot
+experiment: revocation
+seeds: 2
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: enron_c
+  sync: periodic:86400
+  events: 1
+  warm_restricted: 2
+  probe_retained: true
+  probe_readonly: true
+  probe_unseen: true
+  probe_times: [0, 3600, 86400]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  summarizer: llm
+grid:
+  preset: [baseline, authz_prefilter, epoch, full]
+  revocation_type: [single_doc]

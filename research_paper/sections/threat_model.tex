@@ -32,14 +32,15 @@ Index ACLs & Security trimming stores user or group identifiers in an index fiel
 them at query time~\cite{doc_azure_trimming}; vector stores filter on payload or metadata
 fields~\cite{doc_qdrant,doc_pinecone,doc_chroma}; connectors ingest ACLs with items and re-crawl on a
 schedule~\cite{doc_graph_connectors}. & Per-user ACL booleans in Chroma metadata, pre-filter in the
-query; sync by hourly or daily crawl, webhook, or webhook with loss and a daily backstop. \\
+query; sync by daily crawl (the testbed also implements hourly crawls and webhooks with loss and a
+backstop). \\
 Semantic cache & Similarity threshold and TTL; scoping by user or other fields is configured by the
 application~\cite{doc_gptcache,doc_redisvl,bang2023gptcache,gill2024meancache}. & Threshold 0.90,
 TTL 3600\,s; per-user scope in \texttt{baseline}, tenant-shared scope as the named misconfiguration
 \texttt{baseline\_shared}. \\
 Chat memory & Recent turns kept verbatim, older turns replaced by a model-written running
 summary~\cite{doc_langchain_summary,doc_llamaindex_memory,wang2023recursively}. & Summary after 8
-turns, 4 kept verbatim, written by the generator model; session retention swept (none, 1\,h, 24\,h). \\
+turns, 4 kept verbatim, written by the generator model; sessions retained for the whole run. \\
 Revocation & Access must be modified or disabled when users change role or
 leave~\cite{nist80053r5}. & Single document, role removal, department move (mover), offboarding,
 document reclassification. \\
@@ -97,5 +98,5 @@ T8 & A revoked user re-enters content received earlier, which enters shared stat
 T1--T3 are revocation threats, evaluated by the revocation experiment. T4--T7 are existence channels,
 evaluated by the twin-world experiment; T2 also carries existence signal when a cache is shared
 between users. T8 does not arise from a copy the application made but from the user re-supplying
-content, which is why assumption~A1 (\cref{sec:soundness}) states it and \cref{sec:res-launder}
-measures it.
+content, which is why assumption~A1 (\cref{sec:soundness}) states it; measuring it is future
+work.

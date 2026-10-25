@@ -2,8 +2,13 @@
 \label{sec:conclusion}
 
 Revoking access in the identity system of a multi-tenant RAG application does not revoke the copies
-the application has already made. \pending{C: three to four sentences with the final numbers: how
-much never-seen content a revoked user recovers and through which artifact; how long memory leaks
-under realistic retention; what the retrieval-time designs leave; which read-time defense reaches zero
-at the lowest utility cost; insider existence inference with and without the defense.} Re-typed
-content remains outside what any artifact-level mechanism can follow.
+the application has already made. \pending{C: three to four sentences with the final numbers from
+configs/min/: how much a revoked user recovers under baseline, how much of it is new, and through which
+artifact; what the retrieval-time design leaves; which read-time defense reaches zero at the lowest
+utility cost; insider existence inference with and without the defense (stub).} Re-typed content
+remains outside what any artifact-level mechanism can follow.
+
+Future work: role, mover and reclassification revocations with bystanders, lost revocation hooks, long
+sessions, paste-back laundering at scale, larger and hosted models, lifetime sweeps over sync policy,
+session retention and revocation gap, cache-threshold sweeps with natural rewordings, and
+leave-one-out ablations of the defense; the testbed already implements each of them.

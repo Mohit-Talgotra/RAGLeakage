@@ -1,56 +1,37 @@
 \section{Experimental Setup}
 \label{sec:setup}
 
-\Cref{tab:grid} lists the experiments; each row is one configuration file in the released
-repository. All use five seeds. On the generated corpus each seed is its own corpus; on Enron the
-seeds re-draw events from one corpus. Real-model cells have 200 revocation events (5 seeds $\times$
-40), sized so that a difference of \pending{0.05} in $\LM$ is detectable at 80\% power under the
-variance of the pilot runs (\cref{app:pilot}).
+\Cref{tab:grid} lists the experiments; each row is one configuration file in \texttt{configs/min/} of
+the released repository. All use the Enron corpus with canaries and five seeds, which re-draw
+revocation events from the one corpus. The model run has 50 revocation events per cell (5 seeds
+$\times$ 10); the stub runs have 200.
 
 \begin{table*}[t]
 \centering
-\caption{Experiments. Corpus: G = generated (one corpus per seed), E = Enron with canaries. Model:
-L8 = Llama-3.1-8B; ``scale'' = the five local models of \cref{sec:data} plus GPT-4o-mini; stub =
-validation harness. Units: revocation events, test probes, or queries per cell.}
+\caption{Experiments, all on Enron with canaries. Model: L8 = Llama-3.1-8B (4-bit, served locally);
+stub = deterministic validation harness. Units: revocation events per cell, or test probes for
+existence.}
 \label{tab:grid}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}llp{9.6cm}lr@{}}
+\begin{tabular}{@{}llp{9.0cm}lr@{}}
 \toprule
-RQ & Corpus, model & Grid & Config & Units \\
+RQ & Model & Grid & Config & Units \\
 \midrule
-1 & G, L8 & re-opened artifact (none, index, cache, memory) $\times$ revocation (single, role, mover) from \texttt{full}; daily crawl & \texttt{p1\_surfaces} & 200 \\
-1 & E, L8 & same, single and role & \texttt{p1\_surfaces\_enron} & 200 \\
-1 & G, stub & same, plus offboarding; one-sentence answers & \texttt{p1\_surfaces\_stub} & 200 \\
-2 & G, L8 & sync (hourly, daily, webhook, 5\% lost webhooks + daily backstop) $\times$ session retention (none, 1\,h, 24\,h) $\times$ revocation gap (0--10\,min, 1--2\,h, 24--25\,h); \texttt{baseline} & \texttt{p2\_lifetimes} & 200 \\
-2 & G, stub & cache threshold (0.80--0.95) $\times$ TTL (600, 3600, 21\,600\,s), natural rewordings & \texttt{p2\_cache} & 200 \\
-3 & G / E, L8 & preset (strawman, baseline, baseline\_shared, legacy, epoch, full, full\_user); insider and outsider; measured latency & \texttt{p3\_existence(\_enron)} & \pending{n} \\
-4 & G, L8 & leave-one-out from \texttt{full}, with and without one-hop summary taint; lossy webhooks & \texttt{p4\_ablation\_revocation} & 200 \\
-4 & G, stub & pre-filter on/off $\times$ leave-one-out of metadata switches $\times$ response variant (as is, fast refusal, 30\,ms floor, 2\,s deadline, withheld scores) & \texttt{p4\_ablation\_existence} & \pending{n} \\
-4/5 & G / E, L8 & defenses (baseline, baseline\_shared, authz\_prefilter, authz\_postfilter, epoch, flush, full, full\_user, full\_fine) $\times$ revocation (single, role) $\times$ summary (model-written, extractive); retained-document probes & \texttt{p4\_defenses\_revocation(\_enron)} & 200 \\
-4 & G, L8 & shared state: a colleague's answers about never-asked facts enter the cache; baseline, baseline\_shared, epoch, full, full\_user $\times$ (single, mover) & \texttt{p4\_shared\_state} & 200 \\
-4 & G, L8 & 5\% lost revocation hooks and webhooks; flush, epoch, full, full\_user $\times$ (single, role) & \texttt{p4\_lossy\_hooks} & 200 \\
-4/5 & G, L8 & reclassification with a bystander; baseline, epoch, flush, full, full\_user, full\_fine $\times$ summary & \texttt{p4\_reclassify} & 200 \\
-4 & G, stub & same defenses, existence & \texttt{p4\_defenses\_existence} & \pending{n} \\
-5 & G, L8 & long session (about 50 questions), revoke one document; baseline, epoch, flush, full, full\_user, full\_fine $\times$ summary & \texttt{p5\_long\_session} & 100 \\
-5 & G, L8 & ten-turn sessions, no revocation; same presets $\times$ IAM round trip (0, 10\,ms) $\times$ padding (on, off) & \texttt{p5\_utility} & 600 queries \\
-2 & G, L8 & read-only vs writing probes $\times$ cache TTL (3600, 86\,400\,s); baseline & \texttt{p2\_writes} & 200 \\
-T8 & G, L8 and Qwen2.5-32B & paste-back laundering, fingerprinting off/on; full, full\_user, epoch & \texttt{p6\_launder} & 200 \\
-C1 & G / E, L8 & document edited after revocation; baseline, authz\_prefilter, epoch, full & \texttt{p7\_update(\_enron)} & 200 \\
-scale & G, scale & baseline and full & \texttt{p8\_models} & 200 \\
+1, 2, 4, 5 & L8 & preset (baseline, authz\_prefilter, epoch, full) $\times$ single-document revocation; daily crawl; model-written summaries; probes at 0\,s, 1\,h, 24\,h, including never-asked facts and retained documents & \texttt{p\_min\_enron} & 50 \\
+-- & L8 & same cells, 2 seeds $\times$ 1 event; timing check only, not reported & \texttt{p\_min\_pilot} & 2 \\
+4, 5 & stub & preset (baseline, baseline\_shared, authz\_prefilter, authz\_postfilter, epoch, flush, full) $\times$ single-document revocation; extractive summaries; one-sentence answers; probes from 0\,s to 48\,h & \texttt{p\_min\_defenses\_stub} & 200 \\
+3 & stub & preset (strawman, baseline, baseline\_shared, legacy, epoch, full, full\_user); insider and outsider; train e1--e3, test e4--e5 & \texttt{p\_min\_existence\_stub} & \pending{n} \\
+C1 & stub & document edited after revocation; baseline, authz\_prefilter, epoch, full & \texttt{p\_min\_update\_stub} & 200 \\
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table*}
 
 \paragraph{Probe schedule.}
-0\,s, 10\,min, 1\,h, 4\,h, 12\,h, 24\,h and 48\,h after revocation; the lifetime experiment adds
-1\,min, 30\,min, 2\,h, 8\,h, 18\,h and 36\,h.
+The model run probes 0\,s, 1\,h and 24\,h after revocation; the stub runs probe at 0\,s, 10\,min,
+1\,h, 4\,h, 12\,h, 24\,h and 48\,h.
 
 \paragraph{Environment.}
-\pending{GPU type, vLLM version, model revisions}; Python 3.14, scikit-learn 1.9.1, ChromaDB 1.5.9,
-sentence-transformers 6.1.0. Latency results are comparable within the paper only. Runs of different
-(configuration, seed) pairs execute in parallel against one vLLM server per GPU; each pair has its own
-seeded random streams and output, and a test checks that parallel and sequential runs produce
-identical rows. Existence runs, which measure latency, send one request at a time to each server,
-so every call is timed on an otherwise idle GPU.
+One laptop with an RTX 3050 laptop GPU (6\,GB) running Ollama \pending{version} with the default
+4-bit build of Llama-3.1-8B; Python 3.14, scikit-learn 1.9.1, ChromaDB 1.5.9, sentence-transformers
+6.1.0. Runs are sequential. Latency results are comparable within the paper only.

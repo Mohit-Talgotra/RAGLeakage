@@ -1,21 +1,24 @@
 \section{Corpora and Systems}
 \label{sec:data}
 
-\paragraph{Real text: Enron e-mail.}
-The real-text corpus is built from Enron e-mail~\cite{klimt2004enron} with the questions and gold
-answers of the EnronQA benchmark~\cite{ryan2025enronqa}.\footnote{\url{https://huggingface.co/datasets/MichaelR207/enron_qa_0922}.}
+\paragraph{Primary corpus: Enron e-mail.}
+All results in the main text use Enron e-mail~\cite{klimt2004enron} with the questions and gold
+answers of the EnronQA benchmark~\cite{ryan2025enronqa}: real e-mail, questions and answers;
+tenancy and permissions derived from each message's recipients; a canary sentence injected into
+every restricted e-mail.\footnote{\url{https://huggingface.co/datasets/MichaelR207/enron_qa_0922}.}
 Ten inboxes, sampled from the 110 that have enough mail, form five tenants of two inboxes each, and
 each inbox owner has an assistant. Mail addressed to few people is restricted to its inbox group and
 mass mail is internal to the tenant, giving 650 documents of which 500 are restricted (1.7 chunks
 each at 300 tokens). E-mails in one thread form a project. Facts are short spans of the gold answers
 that occur verbatim in the e-mail and not in the question; 43\% of them also occur in another e-mail
 of the corpus, so the judge scores only the corpus-unique ones (\cref{sec:method}).
-Following the secret-sharer method~\cite{carlini2019secret}, every restricted e-mail also receives a
-unique canary sentence, which gives a zero-ambiguity leak signal on real text. The text, questions
-and answers are real; the tenancy and ACLs are ours.
+Following the secret-sharer method~\cite{carlini2019secret}, the canary sentence of each restricted
+e-mail is unique, which gives a zero-ambiguity leak signal on real text. The text, questions and
+answers are real; the tenancy and ACLs are ours.
 
-\paragraph{Generated corpus with independent replicates.}
-A template-generated corpus provides exact ground truth and controlled variation. Each seed generates
+\paragraph{Generated corpus: a controlled stub harness.}
+A template-generated corpus provides exact ground truth and controlled variation; it backs the test
+suite and the pilot study (\cref{app:pilot}) and is not used for the results in the main text. Each seed generates
 its own corpus, so seeds are independent replicates rather than re-draws of events from one corpus.
 Every corpus has five tenants of 100 documents (40 public, 30 internal, 30 restricted) and eight users
 per tenant (six employees, two contractors). Restricted documents come in projects of two, so the twin
@@ -33,15 +36,16 @@ a threshold of 0.90 and a TTL of 3600\,s unless varied. Memory writes a summary 
 4 turns verbatim.
 
 \paragraph{Generators.}
-Real models are the primary evidence: \pending{Qwen2.5-3B, Llama-3.1-8B, Qwen2.5-7B and
-Qwen2.5-32B (instruction-tuned), served with vLLM at temperature 0, and GPT-4o-mini through its
-API}. Each model also writes the memory summaries, with a running-summary prompt in the style of
+The model run uses Llama-3.1-8B (instruction-tuned; 4-bit, the default build of Ollama, served
+locally) at temperature 0. The same model writes the memory summaries, with a running-summary prompt in the style of
 LangChain's summary memory~\cite{doc_langchain_summary}. A deterministic stub that answers
 extractively from the best-matching context unit, with an extractive summarizer that keeps sentences
-carrying figures, serves as a validation harness and as an upper bound on what a summary retains; stub
-and model results are never pooled.
+carrying figures, serves as a validation harness and runs the broader defense comparison, the
+existence experiment and the post-revocation update experiment; stub and model results are never
+pooled.
 
 \paragraph{Clock.}
 A simulated clock adds virtual waits (time between probes, padding) to real compute time, so one run
-covers 48\,h after revocation. Generation latency is measured on every call in the existence
-experiments; it is not replayed from a cache.
+covers up to 48\,h after revocation. The existence experiment uses the stub, whose generation
+latency is simulated on the clock; its timing channel therefore reflects the testbed's compute time
+and the stub's latency model, not a served model.

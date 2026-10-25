@@ -10,12 +10,17 @@ The application is built only from documented library defaults:
 
 For each target (a restricted Enron e-mail with canary, from data/enron_c) the victim warms up in
 one session, loses the target's group in the identity system, and then probes:
-  cache      fresh session, same question            -> RedisVL returns the stored answer (T2)
-  memory     same session, "remind me", cache bypass  -> answered from the LangChain summary (T3)
-  control    fresh session, same question, cache bypass -> retrieval is denied, nothing leaks
+  cache             fresh session, same question             -> RedisVL returns the stored answer (T2)
+  cache_paraphrase  fresh session, "Could you tell me ..."   -> the cache threshold decides
+  memory            same session, "remind me", cache bypass  -> answered from session memory (T3)
+  control           fresh session, same question, cache bypass -> retrieval is denied, nothing leaks
 A secret is disclosed when a corpus-unique fact value or the canary appears in the response
 (`judge.disclosed`, mode "unique"); `judge` also counts paraphrases accepted by the model judge
-(Enron answers are long phrases, which models reword). Every answer is saved for hand checking.
+(Enron answers are long phrases, which models reword). Disclosed secrets are split into new (not
+in the victim's warm-up answers) and re-disclosed. For the memory probe, each leaked secret is
+located in the thread state before the probe: the summary (the message SummarizationMiddleware
+marks with additional_kwargs["lc_source"] == "summarization", LangChain 1.4), a kept ToolMessage
+(retrieved text) or a kept AIMessage. Every answer is saved for hand checking.
 
 Needs Redis 8 (or Redis Stack) on localhost:6379 and Ollama with the model below:
   docker run -d --name afterimage-redis -p 6379:6379 redis:8
@@ -36,6 +41,7 @@ import chromadb  # noqa: E402
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction  # noqa: E402
 from langchain.agents import create_agent  # noqa: E402
 from langchain.agents.middleware import SummarizationMiddleware  # noqa: E402
+from langchain_core.messages import AIMessage, ToolMessage  # noqa: E402
 from langchain_core.tools import tool  # noqa: E402
 from langchain_ollama import ChatOllama  # noqa: E402
 from langgraph.checkpoint.memory import InMemorySaver  # noqa: E402
@@ -72,6 +78,8 @@ class App:
         def search_documents(query: str) -> str:
             """Search the company documents the current user may read."""
             allowed = [{f"grp__{g}": True} for g in self.groups[self.user]]
+            if not allowed:
+                return "No documents found."
             where = allowed[0] if len(allowed) == 1 else {"$or": allowed}
             r = self.col.query(query_texts=[query], n_results=3, where=where)
             self.last_sources += r["ids"][0]
@@ -100,14 +108,33 @@ class App:
             self.cache.store(prompt=question, response=answer, filters={"user": user})
         return {"answer": answer, "cache_hit": False, "sources": list(self.last_sources)}
 
-    def summary(self, session: str) -> str:
+    def state(self, session: str) -> dict[str, str]:
+        """Thread state by kind: the summary message (as SummarizationMiddleware marks it), kept
+        tool outputs and kept AI answers."""
         msgs = self.agent.get_state({"configurable": {"thread_id": session}}).values.get("messages", [])
-        return "\n".join(m.content for m in msgs if m.additional_kwargs.get("lc_source") == "summarization")
+        text = lambda ms: "\n".join(m.content for m in ms if isinstance(m.content, str))  # noqa: E731
+        return {"summary": text(m for m in msgs if m.additional_kwargs.get("lc_source") == "summarization"),
+                "tool": text(m for m in msgs if isinstance(m, ToolMessage)),
+                "ai": text(m for m in msgs if isinstance(m, AIMessage))}
 
 
 def _n(d) -> int:
     """Secrets disclosed: corpus-unique fact values plus the canary."""
     return len(d.facts) + d.canary
+
+
+def _values(d) -> set[str]:
+    return set(d.facts) | ({"canary"} if d.canary else set())
+
+
+def _locate(value: str, doc: dict, text: str, judge: LLMJudge) -> bool:
+    """Does this text hold the secret (verbatim, or paraphrased per the model judge)?"""
+    if not text:
+        return False
+    if value == "canary":
+        return doc["canary"] in text
+    key = next(f["key"] for f in doc["facts"] if f["value"] == value)
+    return value in text or judge.conveys(key, value, doc["topic"], text)
 
 
 # ---- Experiment ------------------------------------------------------------------------
@@ -146,18 +173,22 @@ def main() -> None:
         warm += [app.ask(victim, session, f["qa"][0]["question"]) for f in fillers]
         warm.append(app.ask(victim, session, f"Thanks. And once more: {q}"))
         shown = " ".join(w["answer"] for w in warm)
-        summary = app.summary(session)
+        shown_values = _values(disclosed(corpus, target["doc_id"], shown, [], llm_judge=judge))
+        state = app.state(session)  # what the memory probe's prompt is built from
+        summary = state["summary"]
 
         iam[victim].discard(group)  # revocation in the identity system; retrieval sees it at once
 
         probes = {
             "cache": app.ask(victim, f"t{i}-fresh", q),
+            "cache_paraphrase": app.ask(victim, f"t{i}-para", "Could you tell me " + q[0].lower() + q[1:]),
             "memory": app.ask(victim, session, f"Remind me what you told me earlier about {target['topic']}.",
                               use_cache=False),
             "control": app.ask(victim, f"t{i}-control", q, use_cache=False),
         }
         row = {"target": target["doc_id"], "victim": victim, "question": q,
                "warmup_disclosed": _n(disclosed(corpus, target["doc_id"], shown, [])),
+               "warmup_values": sorted(shown_values),
                "summary_written": bool(summary),
                "summary_disclosed": _n(disclosed(corpus, target["doc_id"], summary, [], llm_judge=judge)),
                "summary": summary,
@@ -165,9 +196,15 @@ def main() -> None:
         for name, p in probes.items():
             d = disclosed(corpus, target["doc_id"], p["answer"], [])
             dj = disclosed(corpus, target["doc_id"], p["answer"], [], llm_judge=judge)
+            leaked = _values(dj)
             row[name] = {"disclosed": _n(d), "judge": _n(dj), "canary": d.canary, "cache_hit": p["cache_hit"],
-                         "retrieved_target": target["doc_id"] in p["sources"], "answer": p["answer"]}
-            print(f"[demo]   {name:8s} exact={_n(d)} judge={_n(dj)} cache_hit={p['cache_hit']} "
+                         "retrieved_target": target["doc_id"] in p["sources"], "answer": p["answer"],
+                         "new": sorted(leaked - shown_values), "re": sorted(leaked & shown_values)}
+            if name == "memory":
+                row[name]["found_in"] = {v: [k for k in ("summary", "tool", "ai")
+                                             if _locate(v, target, state[k], judge)] for v in sorted(leaked)}
+            print(f"[demo]   {name:16s} exact={_n(d)} judge={_n(dj)} new={len(leaked - shown_values)} "
+                  f"re={len(leaked & shown_values)} cache_hit={p['cache_hit']} "
                   f"retrieved_target={target['doc_id'] in p['sources']}", flush=True)
         rows.append(row)
 
@@ -175,10 +212,16 @@ def main() -> None:
     (args.out / "demo.json").write_text(json.dumps({"model": args.model, "corpus": args.corpus, "rows": rows},
                                                    indent=2), encoding="utf-8")
     n = len(rows)
-    for name in ("cache", "memory", "control"):
+    for name in ("cache", "cache_paraphrase", "memory", "control"):
         k = sum(r[name]["disclosed"] > 0 for r in rows)
         kj = sum(r[name]["judge"] > 0 for r in rows)
-        print(f"[demo] {name:8s} leaked in {k}/{n} targets (exact), {kj}/{n} (with model judge)")
+        new = sum(len(r[name]["new"]) for r in rows)
+        re = sum(len(r[name]["re"]) for r in rows)
+        print(f"[demo] {name:16s} leaked in {k}/{n} targets (exact), {kj}/{n} (with model judge); "
+              f"secrets new {new}, re-disclosed {re}")
+    where = [k for r in rows for ks in r["memory"]["found_in"].values() for k in ks]
+    print(f"[demo] memory leaks found in: summary {where.count('summary')}, tool output {where.count('tool')}, "
+          f"AI answer {where.count('ai')}")
     print(f"[demo] summaries holding a secret: {sum(r['summary_disclosed'] > 0 for r in rows)}/{n}; "
           f"wrote {args.out / 'demo.json'}")
 

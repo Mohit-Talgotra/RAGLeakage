@@ -37,7 +37,7 @@ summary sentence can carry the taint of the turn it came from, and the lazy chec
 tainted sentences (\texttt{full\_fine}). This stays sound with any generator, since a filtered
 summary's taint is the union of the sentences it keeps. Two things limit it. With model-written
 summaries there is no sentence-to-source mapping, so \texttt{full\_fine} reduces to \texttt{full};
-we therefore report it with an extractive summarizer as well. And an answer's taint covers every
+this paper does not measure it. And an answer's taint covers every
 memory item in its prompt unless the generator reports which items it used: our stub does, real
 models do not, so with real models an answer given after the user discussed the revoked document
 carries that document's taint even if it did not use it. Context
@@ -56,15 +56,15 @@ and are dropped on read when it is stale; a summary written after a revocation d
 turns. This is a read-time check, so it covers lost events, but it discards everything the user
 derived before any revocation, whatever its sources.
 \item \emph{Session flush} (\texttt{flush}). On a revocation event, every session and cache entry of
-that user is dropped. It is eager and depends on event delivery: in our lossy-hook experiment a
-fraction of revocation hooks is never delivered, as with webhooks or a message bus.
+that user is dropped. It is eager and depends on event delivery: a revocation hook that is never
+delivered, as happens with webhooks or a message bus, leaves the user's state in place.
 \end{itemize}
 The read-time alternatives reach zero leakage by construction for the artifacts they cover. The
 comparison that matters is therefore what each one costs (\cref{sec:rq5}). The cost differs most
 when a document is reclassified: the epoch of every user who loses it is bumped and all their
-sessions are discarded, whereas taint discards only what derives from that document. We also run
-\texttt{full} with a per-user cache (\texttt{full\_user}), so that the comparison does not mix the
-defense with cache scope.
+sessions are discarded, whereas taint discards only what derives from that document. The existence
+experiment also runs \texttt{full} with a per-user cache (\texttt{full\_user}), so that the comparison
+does not mix the defense with cache scope.
 
 \subsection{Constant-shape responses}
 Responses expose relevance scores only in coarse bands and only over chunks the user may see, use one
@@ -103,8 +103,8 @@ taint; it also confirms that dropping transitivity violates the invariant.
 \item[A1] \emph{User input is untainted.} Pasted restricted content is not attributed to its source.
 An optional switch fingerprints queries against restricted secrets and taints a query containing one
 verbatim; paraphrased re-entry is the declassification limit of information-flow
-control~\cite{myers1997decentralized,sabelfeld2003language}. \Cref{sec:res-launder} measures this
-channel.
+control~\cite{myers1997decentralized,sabelfeld2003language}. Measuring this channel is future work
+(\cref{sec:conclusion}).
 \item[A2] \emph{No untracked inputs.} Tools, web search or plug-ins would have to label their output.
 \item[A3] \emph{Document ACLs are correct.} A document that copies restricted figures under a broader
 ACL legitimately serves them.

@@ -1,7 +1,8 @@
-\section{Pilot study}
+\section{Pilot study (logs of 7--12 October 2026)}
 \label{app:pilot}
 
-Before the final runs we re-analysed the logs of an earlier pilot (one generated corpus of 500
+This appendix reports a pilot, not the paper's results. Before the final runs we re-analysed the
+logs of an earlier pilot (one generated corpus of 500
 documents, 51 words per restricted document, one chunk each; stub, Qwen2.5-3B and Llama-3.1-8B;
 the deployment's cache shared across each tenant) with the judge and statistics of
 \cref{sec:method}. Four results changed the design.
@@ -27,21 +28,21 @@ Insiders reached AUC 0.714 [0.664, 0.765] and outsiders 0.512 [0.490, 0.532]; th
 alone gave insiders 0.717. Cached answers generated for an authorized colleague were served to
 insiders without access. With the full defense the combined AUC was 0.495 [0.486, 0.504] with the
 stub and 0.540 [0.520, 0.560] with Llama-3.1-8B, whose latency was replayed from a generation cache;
-the final runs measure every call.
+the existence results of this paper use the stub.
 
 \paragraph{Identifier purges and the stale index.}
 The pilot's \texttt{legacy} preset matched \texttt{baseline} in total leakage (0.585 against 0.585)
 because both keep the stale index, which dominates, while \texttt{legacy} did lower memory leakage
-(0.230 against 0.322). Total leakage therefore cannot show that identifier purges miss summaries; the
-ablation with the live ACL check does.
+(0.230 against 0.322). Total leakage therefore cannot show that identifier purges miss summaries; an
+ablation with the live ACL check in place would (future work).
 
 \section{Simulator validation}
 \label{app:validation}
-\pending{V: index-leak lifetime against the closed form $\Delta/2$ for hourly and daily crawls, and
-cache-leak lifetime against the TTL. These hold by construction and validate the simulated clock; they
+\pending{V: index-leak lifetime against the closed form $\Delta/2$ for the daily crawl, and
+cache-leak lifetime against the TTL, from p\_min\_defenses\_stub. These hold by construction and validate the simulated clock; they
 are not findings.}
 
 \section{Stub results}
 \label{app:stub}
-\pending{S: RQ1 with the stub (one-sentence answers, extractive summaries), as an upper bound on what
-summaries retain; differences from the real-model results.}
+\pending{S: per-artifact leakage of p\_min\_defenses\_stub (one-sentence answers, extractive
+summaries) as an upper bound on what summaries retain; differences from the model run.}

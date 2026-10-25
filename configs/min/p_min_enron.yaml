@@ -1,0 +1,23 @@
+# Reduced grid, main model run: Enron with canaries, Llama-3.1-8B (Ollama default 4-bit build) on a
+# laptop GPU. 5 seeds x 10 events = 50 events per cell. No paraphrase bank: fresh-session probes
+# repeat the warm-up question verbatim, so cache hits are not controlled by the threshold.
+name: p_min_enron
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: enron_c
+  sync: periodic:86400
+  events: 10
+  warm_restricted: 2
+  probe_retained: true
+  probe_readonly: true
+  probe_unseen: true
+  probe_times: [0, 3600, 86400]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  summarizer: llm
+grid:
+  preset: [baseline, authz_prefilter, epoch, full]
+  revocation_type: [single_doc]
