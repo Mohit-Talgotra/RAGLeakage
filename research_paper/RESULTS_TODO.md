@@ -7,7 +7,9 @@ Build with `\pendingfalse` in `main.tex` before submission: any leftover marker 
 
 ## 1. Runs → paper slots
 
-Run `python scripts/run_min_grid.py pilot`, then `stub` and `model` (see `README_MIN_RUN.md`). Each
+Run `python scripts/run_min_grid.py pilot`, then `paraphrases` (must end with "0 questions still
+missing"; `model` refuses to start otherwise), then `model`, with `stub` alongside (see
+`README_MIN_RUN.md`). Commit the resulting `data/paraphrases.json` with the results. Each
 run writes `results/<name>/analysis/`. Revocation runs are analysed with the baseline cell as the
 paired reference; existence runs with the default tenant split (never `--train-tenants`).
 

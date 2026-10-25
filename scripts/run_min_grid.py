@@ -2,10 +2,17 @@
 """
 run_min_grid.py -- The reduced Enron grid (configs/min/), for one laptop GPU. Cross-platform.
 
-    python scripts/run_min_grid.py pilot   # 2 seeds x 1 event of the model run; prints s per call
-    python scripts/run_min_grid.py stub    # stub runs (CPU only): defenses, existence, update
-    python scripts/run_min_grid.py model   # the model run: Llama-3.1-8B via Ollama, 100 events/cell
-    python scripts/run_min_grid.py all     # stub, then model
+    python scripts/run_min_grid.py pilot        # 2 seeds x 1 event of the model run; prints s per call
+    python scripts/run_min_grid.py paraphrases  # rewordings of every Enron question (once, ~2 h)
+    python scripts/run_min_grid.py stub         # stub runs (CPU only): defenses, existence, update
+    python scripts/run_min_grid.py model        # the model run: Llama-3.1-8B via Ollama, 100 events/cell
+    python scripts/run_min_grid.py all          # stub, paraphrases, then model
+
+The model run rewords its fresh-session probes from data/paraphrases.json and raises a KeyError on
+the first question the bank lacks, so "model" refuses to start unless every Enron question is
+covered; "paraphrases" retries missing questions with new instruction variants (up to five rounds)
+and must end with "0 questions still missing". Failed replies are cached, so running it again repeats
+the same attempts; if questions are still missing after five rounds, report them.
 
 Each config is run cell by cell (run.py --only cell_id=...), then analysed with analyze.py. The
 reference for paired tests is the baseline cell of revocation runs; existence runs have none, and
@@ -30,11 +37,13 @@ sys.path.insert(0, str(ROOT))
 import yaml  # noqa: E402
 
 from run import expand  # noqa: E402
+from src.secure_pipeline.corpus import corpus_dir, load_corpus  # noqa: E402
 
 CONFIGS = ROOT / "configs" / "min"
 STUB = ["p_min_defenses_stub", "p_min_existence_stub", "p_min_update_stub"]
 MODEL = ["p_min_enron"]
 PILOT = ["p_min_pilot"]
+BANK = ROOT / "data" / "paraphrases.json"
 ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
 
@@ -61,6 +70,35 @@ def run_config(name: str, analyze: bool = True) -> Path:
     return out
 
 
+def missing_questions() -> list[str]:
+    """Questions of the Enron corpus without rewordings in the bank (the model run probes with any of
+    them: target, unseen-fact and lost-document questions)."""
+    corpus = load_corpus(corpus_dir("enron_c"))
+    questions = sorted({x["question"] for d in corpus.docs for x in d["qa"]})
+    bank = json.loads(BANK.read_text(encoding="utf-8")) if BANK.exists() else {}
+    return [q for q in questions if q not in bank]
+
+
+def make_paraphrases(rounds: int = 5) -> list[str]:
+    for r in range(1, rounds + 1):
+        _py("scripts/make_paraphrases.py", "--backend", "ollama", "--model", "llama3.1:8b",
+            "--corpus", "enron_c", "--workers", "2", "--attempts", str(3 * r))
+        missing = missing_questions()
+        print(f"[min] paraphrases round {r}: {len(missing)} questions still missing", flush=True)
+        if not missing:
+            break
+    return missing
+
+
+def require_bank() -> None:
+    missing = missing_questions()
+    if missing:
+        sys.exit(f"[min] {len(missing)} questions still missing from {BANK.name} (first: {missing[0]!r}); "
+                 f"the model run would stop with a KeyError. Run 'run_min_grid.py paraphrases' until it "
+                 f"reports 0 missing.")
+    print("[min] paraphrase bank covers every Enron question", flush=True)
+
+
 def pilot_timing(out: Path) -> None:
     """Mean seconds per model call, and what that means for the full model run."""
     lat, events = [], set()
@@ -85,13 +123,21 @@ def pilot_timing(out: Path) -> None:
 
 def main() -> None:
     what = sys.argv[1] if len(sys.argv) > 1 else ""
-    if what not in ("pilot", "stub", "model", "all"):
+    if what not in ("pilot", "paraphrases", "stub", "model", "all"):
         sys.exit(__doc__)
     if what == "pilot":
         pilot_timing(run_config(PILOT[0], analyze=False))
         return
-    for name in (STUB if what in ("stub", "all") else []) + (MODEL if what in ("model", "all") else []):
-        run_config(name)
+    if what in ("stub", "all"):
+        for name in STUB:
+            run_config(name)
+    if what in ("paraphrases", "all"):
+        if make_paraphrases():
+            require_bank()  # exits with the count and the first missing question
+    if what in ("model", "all"):
+        require_bank()
+        for name in MODEL:
+            run_config(name)
     print("[min] done; fill research_paper/RESULTS_TODO.md slots from results/p_min_*/analysis/")
 
 

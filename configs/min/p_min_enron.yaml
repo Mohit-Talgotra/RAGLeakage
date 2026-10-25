@@ -1,6 +1,7 @@
 # Reduced grid, main model run: Enron with canaries, Llama-3.1-8B (Ollama default 4-bit build) on a
-# laptop GPU. 5 seeds x 20 events = 100 events per cell. No paraphrase bank: fresh-session probes
-# repeat the warm-up question verbatim, so cache hits are not controlled by the threshold.
+# laptop GPU. 5 seeds x 20 events = 100 events per cell. Fresh-session probes use the model-written
+# rewordings in data/paraphrases.json (run_min_grid.py paraphrases), so the cache threshold decides
+# whether a reworded question hits the cache.
 name: p_min_enron
 experiment: revocation
 seeds: 5
@@ -14,6 +15,7 @@ base:
   probe_retained: true
   probe_readonly: true
   probe_unseen: true
+  probe_paraphrase: file
   probe_times: [0, 3600, 86400]
   llm_backend: ollama
   llm_model: llama3.1:8b

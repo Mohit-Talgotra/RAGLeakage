@@ -1,5 +1,6 @@
 # Timing check for p_min_enron: same cells, 2 seeds x 1 event. run_min_grid.py pilot prints the
-# mean seconds per model call from these logs.
+# mean seconds per model call from these logs. Verbatim probes (no paraphrase bank needed yet); the
+# rewordings change the questions' text, not the number of model calls.
 name: p_min_pilot
 experiment: revocation
 seeds: 2

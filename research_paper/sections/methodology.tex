@@ -21,9 +21,11 @@ value changes and a new canary replaces the old one, and the new version is re-i
 the stub runs). Each probe time asks a same-session ``remind me what you told me earlier'' question
 (memory, cache, index), a fresh-session question about the target (cache, index), a fresh-session
 question about a target fact the warm-up never asked about (rotating), and fresh-session questions
-about every other warmed-up document the victim also lost. In every run, fresh-session probes
-repeat the warm-up question verbatim (there is no paraphrase bank), so cache hits there are not
-controlled by the cache threshold.
+about every other warmed-up document the victim also lost. In the model run, fresh-session
+questions are natural rewordings written once per question by the same model (eight per question;
+each event uses the one chosen by its index, so cells stay paired), so a cached answer is served only
+if the rewording falls within the cache threshold. The stub runs repeat the warm-up question
+verbatim.
 \end{enumerate}
 
 Probes are \emph{read-only}: they neither write the cache nor append to memory. Otherwise every

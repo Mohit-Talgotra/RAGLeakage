@@ -14,9 +14,10 @@ cell; larger and hosted models are not measured, and quantization may change wha
 Intervals are correspondingly wide, and the broader defense comparison, the existence experiment and
 the update experiment use the stub generator only.
 
-\paragraph{Verbatim probes.}
-Fresh-session probes repeat the warm-up question verbatim, so they hit the cache at any similarity
-threshold; cache leakage is measured for the repeated question, not for rewordings.
+\paragraph{Rewordings.}
+The model run's fresh-session probes use rewordings written by the generator model itself, which may
+vary less than real users' wording. The stub runs repeat questions verbatim, so their cache leakage
+holds for the repeated question only.
 
 \paragraph{Corpus.}
 The Enron text, questions and answers are real, but tenancy and permissions are derived from each

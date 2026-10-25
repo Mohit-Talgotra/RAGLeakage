@@ -14,8 +14,9 @@ per event by event index, so cells stay paired.
 Name every corpus a run uses: with corpus: synthetic_v3@seed each seed has its own corpus and its
 own questions. Questions of every document are covered, since a role, mover or offboarding
 revocation probes lost filler documents too. The experiment raises on a missing question, so rerun
-this script until it reports "0 to generate". A reply that is not a JSON list is retried twice with a
-reworded instruction; questions still without rewordings are listed at the end.
+this script until it reports "0 questions still missing". A reply that is not a JSON list is retried
+with a reworded instruction (--attempts variants); failed replies are cached, so a rerun only helps
+with a higher --attempts. Questions still without rewordings are listed at the end.
 
 Generations go through the LLM disk cache, so a rerun is free; commit data/paraphrases.json with
 the results.
@@ -70,6 +71,9 @@ def main() -> None:
                     help="questions of every document (default) or of restricted documents only")
     ap.add_argument("--n", type=int, default=8)
     ap.add_argument("--workers", type=int, default=1, help="concurrent requests to the server")
+    ap.add_argument("--attempts", type=int, default=3,
+                    help="instruction variants per question; failed replies are cached, so raise this "
+                         "(3, 6, 9, ...) to give still-missing questions new attempts on a rerun")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "paraphrases.json")
     args = ap.parse_args()
 
@@ -83,7 +87,7 @@ def main() -> None:
     print(f"[paraphrase] {len(questions)} questions, {len(missing)} to generate")
     # Questions are independent; threads only overlap the server round trips (results in order).
     pool = ThreadPoolExecutor(args.workers)
-    for i, (q, options) in enumerate(zip(missing, pool.map(lambda q: rewordings(llm, q, args.n), missing)), 1):
+    for i, (q, options) in enumerate(zip(missing, pool.map(lambda q: rewordings(llm, q, args.n, args.attempts), missing)), 1):
         if options:
             bank[q] = options
         if i % 50 == 0:
