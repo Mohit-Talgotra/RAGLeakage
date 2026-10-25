@@ -36,22 +36,20 @@ out; if `epoch` keeps as much retained-document recall as `full`, say the simple
 - **Judge validation.** `results-calc/results/judge_sample/judge_validation.csv` has 150 rows and an
   empty `human_label` column, so the paper calls the model judge unvalidated. If two annotators label
   it later, restore a measured precision/recall sentence in methodology and limitations.
-- **Ethics.** Decide whether to notify the LangChain and RedisVL maintainers about the real-stack
-  behaviour, and fill the `\pending` in `sections/ethics.tex`.
+- **Ethics.** Done: no maintainer notification (documented, configurable behaviour); `sections/ethics.tex`.
 - **Availability.** Repository URL and log deposit (`sections/availability.tex`); the current URL
   names an author, which breaks double-blind review.
 - **Venue.** `main.tex` uses IEEEtran conference mode. Switch the class for an ACM or USENIX venue
   and cut to its page limit.
-- **Reference check.** Every bib entry under the "post-audit additions" marker was written from
-  memory. Check each against the publisher record; `wang2025mextra` and `wang2024unlearningrag` are
-  marked `VERIFY`, and `jayaraman2025permissioned` needs its arXiv id. Check the product-documentation
-  URLs and Table `tab:grounding` against the current documentation.
+- **Reference check.** Done 25 Oct 2026 for the post-audit entries (Crossref, arXiv, USENIX pages;
+  documentation URLs and the claims of Table `tab:grounding` checked against the pages). Left for
+  you: `redell1974selective` has no online record (venue from textbook bibliographies), and IEEE's
+  record of `backes2005lazy` lists two authors where IBM's report lists three (Cachin); the bib keeps three.
 - **Related-work table.** Check each cell of `tab:related` against the cited paper.
 - **Author names** in the IEEEtran header.
-- **Real-stack demonstration.** Done (25 Oct 2026, `results/real_stack_demo/demo.json`, 10 targets,
-  Qwen2.5-7B). `scripts/real_stack_demo.py` now also reports new vs re-disclosed secrets, where each
-  memory leak sits in the thread state, and a reworded cache probe; rerun it to get those fields (the
-  committed `demo.json` predates them).
+- **Real-stack demonstration.** Done 25 Oct 2026 with Llama-3.1-8B (`results/real_stack_demo/demo.json`,
+  judge Qwen2.5-7B) and earlier with Qwen2.5-7B (`demo_qwen2.5-7b.json`); paragraph `sec:res-realstack`,
+  all answers hand-checked.
 
 ## 3. Numbers already in the paper (verified, pilot re-analysis)
 
@@ -68,4 +66,5 @@ the new judge and statistics (`analyze.py`, judge mode `unique`, target-clustere
 | existence, old baseline, insider / outsider | `results/rq3_existence` | 0.714 [0.664, 0.765] / 0.512 [0.490, 0.532]; content 0.717 |
 | existence, full, stub / Llama | `rq3_existence`, `rq3_existence_8b` | 0.495 [0.486, 0.504] / 0.540 [0.520, 0.560] |
 | shared fact values | corpus | 129/619 (21%) v2; 553/1276 (43%) Enron |
-| real-stack demo, cache / memory / control | `results/real_stack_demo/demo.json` | 6/10 (7/10), 5/10 (6/10), 0/10 |
+| real-stack demo (Llama-3.1-8B), cache / reworded cache / memory / control | `results/real_stack_demo/demo.json` | 6/10, 6/10, 5/10 (1 new), 0/10; memory values in summary 4, tool output 2 |
+| real-stack demo (Qwen2.5-7B), cache / memory / control | `results/real_stack_demo/demo_qwen2.5-7b.json` | 6/10 (7/10 judge), 5/10 (6/10), 0/10 |

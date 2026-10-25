@@ -147,13 +147,18 @@ per-document authorization decisions per query, from the revocation runs.}
 To check that the leaks are not artifacts of our pipeline, we rebuilt the scenario from library
 defaults only: a LangChain agent (\texttt{create\_agent}, LangChain 1.4) with a retrieval tool over
 Chroma, \texttt{SummarizationMiddleware} for chat memory and a RedisVL \texttt{SemanticCache} (Redis
-8) scoped per user with a tag filter~\cite{doc_langchain_summary,doc_redisvl}, generating with
-Qwen2.5-7B (\texttt{scripts/real\_stack\_demo.py}). The retrieval tool checks the live identity system
-on every call, so the index never serves a revoked document. For 10 restricted Enron e-mails, a
-victim held a five-turn session, lost the e-mail's group, and asked again. In 10/10 cases retrieval
-refused the e-mail and a fresh session without the cache disclosed nothing. The per-user cache still
-returned the stored answer and disclosed a corpus-unique value or the canary in 6/10 cases (7/10 with
-the model judge), which is every case in which the warm-up had shown one; the same session disclosed
-one in 5/10 (6/10). In two of those, no summary had been written yet: the agent's state keeps the
-retrieved e-mail verbatim as a tool message, so session memory holds the source text itself, not only
-the answers. Every response is in \texttt{results/real\_stack\_demo/demo.json} and was checked by hand.
+8) scoped per user with a tag filter~\cite{doc_langchain_summary,doc_redisvl}
+(\texttt{scripts/real\_stack\_demo.py}). The generator is Llama-3.1-8B (4-bit, served locally by
+Ollama), the model of the main run, and Qwen2.5-7B judges paraphrases. The retrieval tool checks the
+live identity system on every call, so the index never serves a revoked document. For 10 restricted
+Enron e-mails, a victim held a five-turn session, lost the e-mail's group, and asked again. In 10/10
+cases retrieval refused the e-mail and a fresh session without the cache disclosed nothing. The
+per-user cache returned the stored answer in 10/10 cases, both for the original question and for a
+reworded one (``Could you tell me \ldots''), and disclosed a corpus-unique value or the canary in 6/10,
+which is every case in which the warm-up answers had shown one. In the same session, memory disclosed
+a secret in 5/10 cases. Four of these secrets were in the model-written summary and two in a retrieved
+e-mail kept verbatim as a tool message (one in both); in one case, memory disclosed a value that none of
+the victim's warm-up answers contained: the summary had condensed the retrieved e-mail, not only the
+answers, so agent memory carries new disclosure as well as re-disclosure. With Qwen2.5-7B as the
+generator the exact-match counts were the same (cache 6/10, memory 5/10). Every response is in
+\texttt{results/real\_stack\_demo/} and was checked by hand.
