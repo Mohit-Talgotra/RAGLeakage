@@ -2,7 +2,7 @@
 \label{sec:results}
 
 Unless stated otherwise, results are for Llama-3.1-8B (4-bit, served locally) with model-written
-summaries on Enron, 50 revocation events per cell (\texttt{p\_min\_enron}); brackets are 95\%
+summaries on Enron, 100 revocation events per cell (\texttt{p\_min\_enron}); brackets are 95\%
 intervals clustered by target document. Stub results are labelled as such and never pooled with
 model results. Every red value is filled from the configuration named in \cref{tab:grid} (see
 \texttt{RESULTS\_TODO.md}).
@@ -12,7 +12,7 @@ model results. Every red value is filled from the configuration named in \cref{t
 
 \begin{table*}[t]
 \centering
-\caption{Post-revocation leakage per preset (single-document revocation, daily crawl, 50 events per
+\caption{Post-revocation leakage per preset (single-document revocation, daily crawl, 100 events per
 cell). $\LM^{\text{new}}$: secrets the victim was never shown; $\LM^{\text{re}}$: re-disclosure;
 $\LM_{\ge 1\text{h}}$: from probes at least one hour after revocation. Per-artifact columns are
 attributed from ground truth and are not exclusive.}
@@ -93,7 +93,7 @@ simulated, so this paper makes no claim about timing channels of served models.
 \begin{table*}[t]
 \centering
 \caption{Defenses compared on the same paired events (single-document revocation, daily crawl).
-Top: model run (50 events per cell). Bottom: stub (200 events per cell, extractive summaries,
+Top: model run (100 events per cell). Bottom: stub (200 events per cell, extractive summaries,
 one-sentence answers) with insider existence AUC from the stub existence run. Retained recall and
 refusals: answers about documents the victim still holds, in the session where the revocation
 happened.}

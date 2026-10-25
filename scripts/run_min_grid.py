@@ -4,7 +4,7 @@ run_min_grid.py -- The reduced Enron grid (configs/min/), for one laptop GPU. Cr
 
     python scripts/run_min_grid.py pilot   # 2 seeds x 1 event of the model run; prints s per call
     python scripts/run_min_grid.py stub    # stub runs (CPU only): defenses, existence, update
-    python scripts/run_min_grid.py model   # the model run: Llama-3.1-8B via Ollama, 50 events/cell
+    python scripts/run_min_grid.py model   # the model run: Llama-3.1-8B via Ollama, 100 events/cell
     python scripts/run_min_grid.py all     # stub, then model
 
 Each config is run cell by cell (run.py --only cell_id=...), then analysed with analyze.py. The
