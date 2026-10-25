@@ -149,8 +149,10 @@ class LLMClient:
         latency = time.perf_counter() - t0
         if self.use_cache:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"model": self.model_id, "text": text, "latency_s": latency}),
-                            encoding="utf-8")
+            tmp = path.with_suffix(f".{os.getpid()}.tmp")  # atomic: parallel workers share the cache
+            tmp.write_text(json.dumps({"model": self.model_id, "text": text, "latency_s": latency}),
+                           encoding="utf-8")
+            os.replace(tmp, path)
         return Generation(text, latency, self.model_id, cached=False)
 
     def _call_with_retry(self, messages: list[dict], attempts: int = 4) -> str:

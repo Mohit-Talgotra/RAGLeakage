@@ -47,9 +47,11 @@ run's logs and that Enron rows appear in `results/p3_existence_enron/analysis/ex
   until it reports 0 missing (a missing question stops a run). Commit `data/paraphrases.json`.
 - **Venue.** `main.tex` uses IEEEtran conference mode. Switch the class for an ACM or USENIX venue
   and cut to its page limit (move the robustness paragraphs to the appendix if needed).
-- **Real-stack demonstration (audit H4.3).** Not done. Show one leak end-to-end in an unmodified
-  open-source stack (for example LangChain summary memory + Chroma + RedisVL semantic cache). This
-  is the strongest external-validity evidence still missing.
+- **Real-stack demonstration (audit H4.3). Done 25 Oct 2026**, results paragraph
+  `sec:res-realstack`: `scripts/real_stack_demo.py` (LangChain 1.4 agent + Chroma + RedisVL
+  SemanticCache on Redis 8, Qwen2.5-7B via Ollama, 10 Enron targets). Cache 6/10 exact (7/10 judge),
+  memory 5/10 (6/10), control 0/10; all answers hand-checked. Optional: rerun with Llama-3.1-8B on the
+  GPU box (`--model llama3.1:8b`, needs Ollama) and more targets.
 - **Reference check.** Every bib entry under the "post-audit additions" marker was written from
   memory. Check each against the publisher record (author lists, venue, year); two are marked
   `VERIFY` because their author lists are incomplete (`wang2025mextra`, `wang2024unlearningrag`),
@@ -73,3 +75,4 @@ the new judge and statistics (`analyze.py`, judge mode `unique`, target-clustere
 | existence, old baseline, insider / outsider | `results/rq3_existence` | 0.714 [0.664, 0.765] / 0.512 [0.490, 0.532]; content 0.717 |
 | existence, full, stub / Llama | `rq3_existence`, `rq3_existence_8b` | 0.495 [0.486, 0.504] / 0.540 [0.520, 0.560] |
 | shared fact values | corpus | 129/619 (21%) v2; 553/1276 (43%) Enron |
+| real-stack demo, cache / memory / control | `results/real_stack_demo/demo.json` | 6/10 (7/10), 5/10 (6/10), 0/10 |

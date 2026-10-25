@@ -264,12 +264,15 @@ class VectorIndex:
             where = {"tenant_id": tenant_id}
         res = self._col.query(
             query_embeddings=[np.asarray(q_emb, dtype=np.float32).tolist()],
-            n_results=top_k,
+            n_results=top_k + 8,
             where=where,
             include=["distances", "metadatas"],
         )
+        # Chroma returns exactly tied candidates in arbitrary order, so runs did not reproduce;
+        # break ties by chunk id (the extra candidates cover ties across the top-k cut).
+        hits = sorted(zip(res["ids"][0], res["distances"][0], res["metadatas"][0]), key=lambda h: (h[1], h[0]))
         out = []
-        for cid, dist, meta in zip(res["ids"][0], res["distances"][0], res["metadatas"][0]):
+        for cid, dist, meta in hits[:top_k]:
             c = self._chunks[cid]
             out.append(Candidate(
                 chunk_id=cid, doc_id=c.doc_id, tenant_id=c.tenant_id, title=c.title, text=c.text,

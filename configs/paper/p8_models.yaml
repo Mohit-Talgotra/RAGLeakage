@@ -1,4 +1,4 @@
-# Model scale: does the picture hold from 3B to 70B and for a hosted model? Serve the local
+# Model scale: does the picture hold from 3B to 32B and for a hosted model? Serve the local
 # models with vLLM behind OLLAMA_BASE_URL (OpenAI-compatible) and use the HF model ids there.
 # gpt-4o-mini needs OPENAI_API_KEY; drop it if not available.
 name: p8_models
@@ -17,5 +17,5 @@ base:
   llm_backend: ollama
   summarizer: llm
 grid:
-  llm_model: [qwen2.5:3b, llama3.1:8b, qwen2.5:7b, qwen2.5:32b, llama3.3:70b]
+  llm_model: [qwen2.5:3b, llama3.1:8b, qwen2.5:7b, qwen2.5:32b]
   preset: [baseline, full]

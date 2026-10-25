@@ -174,9 +174,25 @@ distribution in long sessions.}
 full, full\_user and epoch, Llama-3.1-8B and Qwen2.5-32B (200 events per cell); set against the
 cache hit rate of full vs full\_user from R5.}
 
+\paragraph{Unmodified open-source stack.}
+\label{sec:res-realstack}
+To check that the leaks are not artifacts of our pipeline, we rebuilt the scenario from library
+defaults only: a LangChain agent (\texttt{create\_agent}, LangChain 1.4) with a retrieval tool over
+Chroma, \texttt{SummarizationMiddleware} for chat memory and a RedisVL \texttt{SemanticCache} (Redis
+8) scoped per user with a tag filter~\cite{doc_langchain_summary,doc_redisvl}, generating with
+Qwen2.5-7B (\texttt{scripts/real\_stack\_demo.py}). The retrieval tool checks the live identity system
+on every call, so the index never serves a revoked document. For 10 restricted Enron e-mails, a
+victim held a five-turn session, lost the e-mail's group, and asked again. In 10/10 cases retrieval
+refused the e-mail and a fresh session without the cache disclosed nothing. The per-user cache still
+returned the stored answer and disclosed a corpus-unique value or the canary in 6/10 cases (7/10 with
+the model judge), which is every case in which the warm-up had shown one; the same session disclosed
+one in 5/10 (6/10). In two of those, no summary had been written yet: the agent's state keeps the
+retrieved e-mail verbatim as a tool message, so session memory holds the source text itself, not only
+the answers. Every response is in \texttt{results/real\_stack\_demo/demo.json} and was checked by hand.
+
 \paragraph{Model scale.}
 \label{sec:real}
-\pending{R8: baseline LM, LM\_new, memory lifetime and full-defense LM per model, 3B to 70B and
+\pending{R8: baseline LM, LM\_new, memory lifetime and full-defense LM per model, 3B to 32B and
 GPT-4o-mini.}
 
 \paragraph{Paraphrase judge.}

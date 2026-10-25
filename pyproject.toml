@@ -21,6 +21,8 @@ dependencies = [
 
 [dependency-groups]
 dev = ["pytest>=8"]
+# scripts/real_stack_demo.py only (needs Redis 8 and Ollama).
+demo = ["langchain>=1.4", "langchain-ollama>=1.1", "redisvl>=0.28"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

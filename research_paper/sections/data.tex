@@ -33,8 +33,8 @@ a threshold of 0.90 and a TTL of 3600\,s unless varied. Memory writes a summary 
 4 turns verbatim.
 
 \paragraph{Generators.}
-Real models are the primary evidence: \pending{Qwen2.5-3B, Llama-3.1-8B, Qwen2.5-7B, Qwen2.5-32B and
-Llama-3.3-70B (instruction-tuned), served with vLLM at temperature 0, and GPT-4o-mini through its
+Real models are the primary evidence: \pending{Qwen2.5-3B, Llama-3.1-8B, Qwen2.5-7B and
+Qwen2.5-32B (instruction-tuned), served with vLLM at temperature 0, and GPT-4o-mini through its
 API}. Each model also writes the memory summaries, with a running-summary prompt in the style of
 LangChain's summary memory~\cite{doc_langchain_summary}. A deterministic stub that answers
 extractively from the best-matching context unit, with an extractive summarizer that keeps sentences

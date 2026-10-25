@@ -49,4 +49,8 @@ scale & G, scale & baseline and full & \texttt{p8\_models} & 200 \\
 
 \paragraph{Environment.}
 \pending{GPU type, vLLM version, model revisions}; Python 3.14, scikit-learn 1.9.1, ChromaDB 1.5.9,
-sentence-transformers 6.1.0. Latency results are comparable within the paper only.
+sentence-transformers 6.1.0. Latency results are comparable within the paper only. Runs of different
+(configuration, seed) pairs execute in parallel against one vLLM server per GPU; each pair has its own
+seeded random streams and output, and a test checks that parallel and sequential runs produce
+identical rows. Existence runs, which measure latency, send one request at a time to each server,
+so every call is timed on an otherwise idle GPU.

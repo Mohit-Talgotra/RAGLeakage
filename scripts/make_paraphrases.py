@@ -27,6 +27,7 @@ import argparse
 import json
 import random
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +69,7 @@ def main() -> None:
     ap.add_argument("--scope", choices=["all", "restricted"], default="all",
                     help="questions of every document (default) or of restricted documents only")
     ap.add_argument("--n", type=int, default=8)
+    ap.add_argument("--workers", type=int, default=1, help="concurrent requests to the server")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "paraphrases.json")
     args = ap.parse_args()
 
@@ -79,8 +81,9 @@ def main() -> None:
     questions = sorted({x["question"] for name in args.corpus for d in docs(name) for x in d["qa"]})
     missing = [q for q in questions if q not in bank]
     print(f"[paraphrase] {len(questions)} questions, {len(missing)} to generate")
-    for i, q in enumerate(missing, 1):
-        options = rewordings(llm, q, args.n)
+    # Questions are independent; threads only overlap the server round trips (results in order).
+    pool = ThreadPoolExecutor(args.workers)
+    for i, (q, options) in enumerate(zip(missing, pool.map(lambda q: rewordings(llm, q, args.n), missing)), 1):
         if options:
             bank[q] = options
         if i % 50 == 0:

@@ -18,7 +18,7 @@ uv run python run.py --config configs/paper/p0_smoke.yaml # every post-audit swi
 ```
 
 - Tests and `configs/smoke.yaml` use `embedder: hash` and `reranker: overlap` (no downloads). The paper configs use `all-MiniLM-L6-v2` and `cross-encoder/ms-marco-MiniLM-L-6-v2`.
-- `run.py` writes `results/<name>/runs/<cell>_s<seed>.jsonl` and skips runs it has already finished (use `--force` to redo them). `--only key=value` runs a subset of cells (one model per vLLM server in `p8_models`). `analyze.py` writes `results/<name>/analysis/`.
+- `run.py` writes `results/<name>/runs/<cell>_s<seed>.jsonl` and skips runs it has already finished (use `--force` to redo them). `--only key=value` runs a subset of cells (one model per vLLM server in `p8_models`). `--workers N` runs (cell, seed) jobs in parallel processes spread over `OLLAMA_BASE_URLS` (comma-separated); existence cells and `llm_cache: false` cells get one worker per server (stub: sequential) so latency stays uncontended. `tests/test_parallel_run.py` checks parallel rows equal sequential rows. `VectorIndex.query` breaks exact score ties by chunk id (Chroma's tie order is arbitrary), so runs reproduce exactly. `analyze.py` writes `results/<name>/analysis/`.
 - Caches, all gitignored: `.cache/embeddings/` (corpus vectors) and `.cache/llm/` (real-LLM generations plus their measured latency, replayed on reruns).
 
 ## Architecture (`src/secure_pipeline/`)
