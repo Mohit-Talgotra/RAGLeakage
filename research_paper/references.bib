@@ -1,7 +1,7 @@
 % Entries above the post-audit marker are peer-reviewed (journal or conference). Fields that could not be
 % confirmed are omitted rather than guessed. Entries below the marker were added after the reviewer audit;
-% preprints and product documentation are labelled as such, and every entry marked VERIFY must be checked
-% against the publisher record before submission (see research_paper/RESULTS_TODO.md).
+% preprints and product documentation are labelled as such. The post-audit entries were checked against
+% Crossref and arXiv records (and USENIX pages for USENIX papers) on 25 Oct 2026.
 
 @inproceedings{lewis2020rag,
   author    = {Lewis, Patrick and Perez, Ethan and Piktus, Aleksandra and Petroni, Fabio and Karpukhin, Vladimir and Goyal, Naman and K{\"u}ttler, Heinrich and Lewis, Mike and Yih, Wen-tau and Rockt{\"a}schel, Tim and Riedel, Sebastian and Kiela, Douwe},
@@ -514,35 +514,45 @@
   title     = {Generative Agents: Interactive Simulacra of Human Behavior},
   booktitle = {Proceedings of the 36th Annual ACM Symposium on User Interface Software and Technology (UIST '23)},
   year      = {2023},
-  doi       = {10.1145/3586183.3606763}
+  doi       = {10.1145/3586183.3606763},
+  pages     = {1--22}
 }
 @inproceedings{zhong2024memorybank,
   author    = {Zhong, Wanjun and Guo, Lianghong and Gao, Qiqi and Ye, He and Wang, Yanlin},
   title     = {{MemoryBank}: Enhancing Large Language Models with Long-Term Memory},
   booktitle = {Proceedings of the AAAI Conference on Artificial Intelligence},
   volume    = {38},
-  year      = {2024}
+  year      = {2024},
+  number    = {17},
+  pages     = {19724--19731},
+  doi       = {10.1609/aaai.v38i17.29946}
 }
 @article{wang2023recursively,
-  author  = {Wang, Qingyue and Ding, Liang and Cao, Yanan and Tian, Zhiliang and Wang, Shi and Tao, Dacheng and Guo, Li},
+  author  = {Wang, Qingyue and Fu, Yanhe and Cao, Yanan and Wang, Shuai and Tian, Zhiliang and Ding, Liang},
   title   = {Recursively Summarizing Enables Long-Term Dialogue Memory in Large Language Models},
-  journal = {arXiv preprint arXiv:2308.15022},
-  year    = {2023}
+  journal = {Neurocomputing},
+  volume  = {639},
+  pages   = {130193},
+  year    = {2025},
+  doi     = {10.1016/j.neucom.2025.130193}
 }
-% VERIFY: author list
 @inproceedings{wang2025mextra,
-  author    = {Wang, Bo and others},
+  author    = {Wang, Bo and He, Weiyi and Zeng, Shenglai and Xiang, Zhen and Xing, Yue and Tang, Jiliang and He, Pengfei},
   title     = {Unveiling Privacy Risks in {LLM} Agent Memory},
   booktitle = {Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (ACL)},
-  year      = {2025}
+  pages     = {25241--25260},
+  year      = {2025},
+  doi       = {10.18653/v1/2025.acl-long.1227}
 }
 
 % ---- Information-flow control for LLM systems ----
-@article{debenedetti2025camel,
-  author  = {Debenedetti, Edoardo and Shumailov, Ilia and Fan, Tianqi and Hayes, Jamie and Carlini, Nicholas and Fabian, Daniel and Kern, Christoph and Shi, Chongyang and Terzis, Andreas and Tram{\`e}r, Florian},
-  title   = {Defeating Prompt Injections by Design},
-  journal = {arXiv preprint arXiv:2503.18813},
-  year    = {2025}
+@inproceedings{debenedetti2025camel,
+  author    = {Debenedetti, Edoardo and Shumailov, Ilia and Fan, Tianqi and Hayes, Jamie and Carlini, Nicholas and Fabian, Daniel and Kern, Christoph and Shi, Chongyang and Terzis, Andreas and Tram{\`e}r, Florian},
+  title     = {Defeating Prompt Injections by Design},
+  booktitle = {IEEE Conference on Secure and Trustworthy Machine Learning (SaTML)},
+  pages     = {587--618},
+  year      = {2026},
+  doi       = {10.1109/SaTML68715.2026.00040}
 }
 @article{wu2024fsecure,
   author  = {Wu, Fangzhou and Cecchetti, Ethan and Xiao, Chaowei},
@@ -554,7 +564,8 @@
   author    = {Wu, Yuhao and Roesner, Franziska and Kohno, Tadayoshi and Zhang, Ning and Iqbal, Umar},
   title     = {{IsolateGPT}: An Execution Isolation Architecture for {LLM}-Based Agentic Systems},
   booktitle = {Network and Distributed System Security Symposium (NDSS)},
-  year      = {2025}
+  year      = {2025},
+  doi       = {10.14722/ndss.2025.241131}
 }
 @article{zhong2025rtbas,
   author  = {Zhong, Peter Yong and Chen, Siyuan and Wang, Ruiqi and McCall, McKenna and Titzer, Ben L. and Miller, Heather and Gibbons, Phillip B.},
@@ -574,25 +585,31 @@
   booktitle = {33rd USENIX Security Symposium},
   year      = {2024}
 }
-% VERIFY: author list and venue
-@article{jayaraman2025permissioned,
-  author  = {Jayaraman, Bargav and Marathe, Virendra J. and Mozaffari, Hamid and Shen, William F. and Kenthapadi, Krishnaram},
-  title   = {Permissioned {LLMs}: Enforcing Access Control in Large Language Models},
-  journal = {arXiv preprint},
-  year    = {2025}
+@inproceedings{jayaraman2025permissioned,
+  author    = {Jayaraman, Bargav and Marathe, Virendra J. and Mozaffari, Hamid and Shen, William F. and Kenthapadi, Krishnaram},
+  title     = {Permissioned {LLMs}: Enforcing Access Control in Large Language Models},
+  booktitle = {Advances in Neural Information Processing Systems},
+  volume    = {38},
+  pages     = {90674--90704},
+  year      = {2025},
+  doi       = {10.52202/085713-2731}
 }
 @inproceedings{bagdasarian2024airgap,
   author    = {Bagdasarian, Eugene and Yi, Ren and Ghalebikesabi, Sahra and Kairouz, Peter and Gruteser, Marco and Oh, Sewoong and Balle, Borja and Ramage, Daniel},
   title     = {{AirGapAgent}: Protecting Privacy-Conscious Conversational Agents},
   booktitle = {Proceedings of the 2024 ACM SIGSAC Conference on Computer and Communications Security (CCS)},
-  year      = {2024}
+  year      = {2024},
+  pages     = {3868--3882},
+  doi       = {10.1145/3658644.3690350}
 }
 @inproceedings{cohenwang2024contextcite,
   author    = {Cohen-Wang, Benjamin and Shah, Harshay and Georgiev, Kristian and Madry, Aleksander},
   title     = {{ContextCite}: Attributing Model Generation to Context},
   booktitle = {Advances in Neural Information Processing Systems},
   volume    = {37},
-  year      = {2024}
+  year      = {2024},
+  pages     = {95764--95807},
+  doi       = {10.52202/079017-3035}
 }
 
 % ---- Authorization caching and revocation ----
@@ -600,7 +617,8 @@
   author    = {Crampton, Jason and Leung, Wing and Beznosov, Konstantin},
   title     = {The Secondary and Approximate Authorization Model and its Application to {Bell-LaPadula} Policies},
   booktitle = {Proceedings of the 11th ACM Symposium on Access Control Models and Technologies (SACMAT)},
-  year      = {2006}
+  year      = {2006},
+  doi       = {10.1145/1133058.1133075}
 }
 @article{wei2009recycling,
   author  = {Wei, Qiang and Ripeanu, Matei and Beznosov, Konstantin},
@@ -608,7 +626,9 @@
   journal = {IEEE Transactions on Parallel and Distributed Systems},
   volume  = {20},
   number  = {2},
-  year    = {2009}
+  year    = {2009},
+  pages     = {275--288},
+  doi       = {10.1109/TPDS.2008.80}
 }
 @inproceedings{redell1974selective,
   author    = {Redell, David D. and Fabry, Robert S.},
@@ -621,19 +641,23 @@
   title     = {An End-to-End Measurement of Certificate Revocation in the Web's {PKI}},
   booktitle = {Proceedings of the 2015 Internet Measurement Conference (IMC)},
   year      = {2015},
-  doi       = {10.1145/2815675.2815685}
+  doi       = {10.1145/2815675.2815685},
+  pages     = {183--196}
 }
 @inproceedings{kallahalla2003plutus,
   author    = {Kallahalla, Mahesh and Riedel, Erik and Swaminathan, Ram and Wang, Qian and Fu, Kevin},
   title     = {Plutus: Scalable Secure File Sharing on Untrusted Storage},
   booktitle = {2nd USENIX Conference on File and Storage Technologies (FAST)},
-  year      = {2003}
+  year      = {2003},
+  pages     = {29--42}
 }
 @inproceedings{backes2005lazy,
   author    = {Backes, Michael and Cachin, Christian and Oprea, Alina},
   title     = {Lazy Revocation in Cryptographic File Systems},
   booktitle = {Third IEEE International Security in Storage Workshop (SISW)},
-  year      = {2005}
+  year      = {2005},
+  pages     = {1--11},
+  doi       = {10.1109/SISW.2005.7}
 }
 
 % ---- Derived data, deletion and access control in data systems ----
@@ -641,7 +665,10 @@
   author    = {Garg, Sanjam and Goldwasser, Shafi and Vasudevan, Prashant Nalini},
   title     = {Formalizing Data Deletion in the Context of the Right to Be Forgotten},
   booktitle = {Advances in Cryptology -- EUROCRYPT 2020},
-  year      = {2020}
+  year      = {2020},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {373--402},
+  doi       = {10.1007/978-3-030-45724-2_13}
 }
 @inproceedings{albab2023k9db,
   author    = {Albab, Kinan Dak and Sharma, Ishan and Adam, Justus and Kilimnik, Benjamin and Jeyaraj, Aaron and Paul, Raj and Agvanian, Artem and Spiegelberg, Leonhard and Schwarzkopf, Malte},
@@ -653,7 +680,9 @@
   author    = {Tsai, Lillian and Gross, Hannah and Kohler, Eddie and Kaashoek, Frans and Schwarzkopf, Malte},
   title     = {Edna: Disguising and Revealing User Data in Web Applications},
   booktitle = {Proceedings of the 29th ACM Symposium on Operating Systems Principles (SOSP)},
-  year      = {2023}
+  year      = {2023},
+  pages     = {434--450},
+  doi       = {10.1145/3600006.3613146}
 }
 @article{shastri2020gdpr,
   author  = {Shastri, Supreeth and Banakar, Vinay and Wasserman, Melissa and Kumar, Arun and Chidambaram, Vijay},
@@ -661,19 +690,25 @@
   journal = {Proceedings of the VLDB Endowment},
   volume  = {13},
   number  = {7},
-  year    = {2020}
+  year    = {2020},
+  pages     = {1064--1077},
+  doi       = {10.14778/3384345.3384354}
 }
 @inproceedings{park2012pbac,
   author    = {Park, Jaehong and Nguyen, Dang and Sandhu, Ravi},
   title     = {A Provenance-Based Access Control Model},
   booktitle = {Tenth Annual International Conference on Privacy, Security and Trust (PST)},
-  year      = {2012}
+  year      = {2012},
+  pages     = {137--144},
+  doi       = {10.1109/PST.2012.6297930}
 }
 @inproceedings{rizvi2004query,
   author    = {Rizvi, Shariq and Mendelzon, Alberto and Sudarshan, S. and Roy, Prasan},
   title     = {Extending Query Rewriting Techniques for Fine-Grained Access Control},
   booktitle = {Proceedings of the 2004 ACM SIGMOD International Conference on Management of Data},
-  year      = {2004}
+  year      = {2004},
+  pages     = {551--562},
+  doi       = {10.1145/1007568.1007631}
 }
 @article{gupta1995views,
   author  = {Gupta, Ashish and Mumick, Inderpal Singh},
@@ -687,7 +722,9 @@
   author    = {Bost, Rapha{\"e}l and Minaud, Brice and Ohrimenko, Olga},
   title     = {Forward and Backward Private Searchable Encryption from Constrained Cryptographic Primitives},
   booktitle = {Proceedings of the 2017 ACM SIGSAC Conference on Computer and Communications Security (CCS)},
-  year      = {2017}
+  year      = {2017},
+  pages     = {1465--1482},
+  doi       = {10.1145/3133956.3133980}
 }
 
 % ---- Semantic caches, filtered vector search, and search side channels ----
@@ -695,19 +732,26 @@
   author    = {Bang, Fu},
   title     = {{GPTCache}: An Open-Source Semantic Cache for {LLM} Applications Enabling Faster Answers and Cost Savings},
   booktitle = {Proceedings of the 3rd Workshop for Natural Language Processing Open Source Software (NLP-OSS)},
-  year      = {2023}
+  year      = {2023},
+  pages     = {212--218},
+  doi       = {10.18653/v1/2023.nlposs-1.24}
 }
-@article{gill2024meancache,
-  author  = {Gill, Waris and Elidrisi, Mohamed and Kalapatapu, Pallavi and Ahmed, Ammar and Anwar, Ali and Gulzar, Muhammad Ali},
-  title   = {{MeanCache}: User-Centric Semantic Caching for {LLM} Web Services},
-  journal = {arXiv preprint arXiv:2403.02694},
-  year    = {2024}
+@inproceedings{gill2024meancache,
+  author    = {Gill, Waris and Elidrisi, Mohamed and Kalapatapu, Pallavi and Ahmed, Ammar and Anwar, Ali and Gulzar, Muhammad Ali},
+  title     = {{MeanCache}: User-Centric Semantic Caching for {LLM} Web Services},
+  booktitle = {IEEE International Parallel and Distributed Processing Symposium (IPDPS)},
+  pages     = {1298--1310},
+  year      = {2025},
+  doi       = {10.1109/IPDPS64566.2025.00117}
 }
-@article{zheng2024inputsnatch,
-  author  = {Zheng, Xinyao and Han, Husheng and Shi, Shangyi and Fang, Qiyan and Du, Zidong and Hu, Xing and Guo, Qi},
-  title   = {{InputSnatch}: Stealing Input in {LLM} Services via Timing Side-Channel Attacks},
-  journal = {arXiv preprint arXiv:2411.18191},
-  year    = {2024}
+@inproceedings{zheng2024inputsnatch,
+  author    = {Zheng, Xinyao and Han, Husheng and Shi, Shangyi and Fang, Qiyan and Du, Zidong and Hu, Xing and Guo, Qi},
+  title     = {{InputSnatch}: Stealing Input in {LLM} Services via Cache-Sharing Timing Side-Channel Attacks},
+  booktitle = {Advanced Parallel Processing Technologies (APPT)},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {483--497},
+  year      = {2026},
+  doi       = {10.1007/978-981-92-4805-6_32}
 }
 @article{carlini2024remote,
   author  = {Carlini, Nicholas and Nasr, Milad},
@@ -719,19 +763,25 @@
   author    = {Gelernter, Nethanel and Herzberg, Amir},
   title     = {Cross-Site Search Attacks},
   booktitle = {Proceedings of the 22nd ACM SIGSAC Conference on Computer and Communications Security (CCS)},
-  year      = {2015}
+  year      = {2015},
+  pages     = {1394--1405},
+  doi       = {10.1145/2810103.2813688}
 }
 @inproceedings{chen2010sidechannel,
   author    = {Chen, Shuo and Wang, Rui and Wang, XiaoFeng and Zhang, Kehuan},
   title     = {Side-Channel Leaks in Web Applications: A Reality Today, a Challenge Tomorrow},
   booktitle = {2010 IEEE Symposium on Security and Privacy},
-  year      = {2010}
+  year      = {2010},
+  pages     = {191--206},
+  doi       = {10.1109/SP.2010.20}
 }
 @inproceedings{gollapudi2023filtered,
   author    = {Gollapudi, Siddharth and Karia, Neel and Sivashankar, Varun and Krishnaswamy, Ravishankar and Begwani, Nikit and Raz, Swapnil and Lin, Yiyong and Zhang, Yin and Mahapatro, Neelam and Srinivasan, Premkumar and Singh, Amit and Simhadri, Harsha Vardhan},
   title     = {{Filtered-DiskANN}: Graph Algorithms for Approximate Nearest Neighbor Search with Filters},
   booktitle = {Proceedings of the ACM Web Conference 2023 (WWW)},
-  year      = {2023}
+  year      = {2023},
+  pages     = {3406--3416},
+  doi       = {10.1145/3543507.3583552}
 }
 @article{patel2024acorn,
   author  = {Patel, Liana and Kraft, Peter and Guestrin, Carlos and Zaharia, Matei},
@@ -739,52 +789,67 @@
   journal = {Proceedings of the ACM on Management of Data},
   volume  = {2},
   number  = {3},
-  year    = {2024}
+  year    = {2024},
+  pages     = {1--27},
+  doi       = {10.1145/3654923}
 }
 
 % ---- RAG privacy attacks and defenses ----
-@article{li2024generating,
-  author  = {Li, Yuying and Liu, Gaoyang and Yang, Yang and Wang, Chen},
-  title   = {Generating Is Believing: Membership Inference Attacks against Retrieval-Augmented Generation},
-  journal = {arXiv preprint arXiv:2406.19234},
-  year    = {2024}
+@inproceedings{li2024generating,
+  author    = {Li, Yuying and Liu, Gaoyang and Wang, Chen and Yang, Yang},
+  title     = {Generating Is Believing: Membership Inference Attacks against Retrieval-Augmented Generation},
+  booktitle = {IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  pages     = {1--5},
+  year      = {2025},
+  doi       = {10.1109/ICASSP49660.2025.10889013}
 }
-@article{naseh2025riddle,
-  author  = {Naseh, Ali and Peng, Yuefeng and Suri, Anshuman and Chaudhari, Harsh and Oprea, Alina and Houmansadr, Amir},
-  title   = {Riddle Me This! {S}tealthy Membership Inference for Retrieval-Augmented Generation},
-  journal = {arXiv preprint arXiv:2502.00306},
-  year    = {2025}
+@inproceedings{naseh2025riddle,
+  author    = {Naseh, Ali and Peng, Yuefeng and Suri, Anshuman and Chaudhari, Harsh and Oprea, Alina and Houmansadr, Amir},
+  title     = {Riddle Me This! {S}tealthy Membership Inference for Retrieval-Augmented Generation},
+  booktitle = {Proceedings of the 2025 ACM SIGSAC Conference on Computer and Communications Security (CCS)},
+  pages     = {1245--1259},
+  year      = {2025},
+  doi       = {10.1145/3719027.3744840}
 }
-@article{dimaio2024pirates,
-  author  = {Di Maio, Christian and Cosci, Cristian and Maggini, Marco and Poggioni, Valentina and Melacci, Stefano},
-  title   = {Pirates of the {RAG}: Adaptively Attacking {LLMs} to Leak Knowledge Bases},
-  journal = {arXiv preprint arXiv:2412.18295},
-  year    = {2024}
+@inproceedings{dimaio2024pirates,
+  author    = {Di Maio, Christian and Cosci, Cristian and Maggini, Marco and Poggioni, Valentina and Melacci, Stefano},
+  title     = {Pirates of the {RAG}: Adaptively Attacking {LLMs} to Leak Knowledge Bases},
+  booktitle = {ECAI 2025},
+  series    = {Frontiers in Artificial Intelligence and Applications},
+  year      = {2025},
+  doi       = {10.3233/FAIA251293}
 }
 @inproceedings{morris2023embeddings,
   author    = {Morris, John X. and Kuleshov, Volodymyr and Shmatikov, Vitaly and Rush, Alexander M.},
   title     = {Text Embeddings Reveal (Almost) As Much As Text},
   booktitle = {Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
-  year      = {2023}
+  year      = {2023},
+  pages     = {12448--12460},
+  doi       = {10.18653/v1/2023.emnlp-main.765}
 }
 @article{koga2024dprag,
-  author  = {Koga, Tatsuki and Wu, Ruihan and Chaudhuri, Kamalika},
+  author  = {Koga, Tatsuki and Wu, Ruihan and Zhang, Zhiyuan and Chaudhuri, Kamalika},
   title   = {Privacy-Preserving Retrieval-Augmented Generation with Differential Privacy},
   journal = {arXiv preprint arXiv:2412.04697},
   year    = {2024}
 }
-@article{zeng2024sage,
-  author  = {Zeng, Shenglai and Zhang, Jiankun and He, Pengfei and Ren, Jie and Zheng, Tianqi and Lu, Hanqing and Xu, Han and Liu, Hui and Xing, Yue and Tang, Jiliang},
-  title   = {Mitigating the Privacy Issues in Retrieval-Augmented Generation ({RAG}) via Pure Synthetic Data},
-  journal = {arXiv preprint arXiv:2406.14773},
-  year    = {2024}
+@inproceedings{zeng2024sage,
+  author    = {Zeng, Shenglai and Zhang, Jiankun and He, Pengfei and Ren, Jie and Zheng, Tianqi and Lu, Hanqing and Xu, Han and Liu, Hui and Xing, Yue and Tang, Jiliang},
+  title     = {Mitigating the Privacy Issues in Retrieval-Augmented Generation ({RAG}) via Pure Synthetic Data},
+  booktitle = {Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  pages     = {24538--24569},
+  year      = {2025},
+  doi       = {10.18653/v1/2025.emnlp-main.1247}
 }
-% VERIFY: author list
 @article{wang2024unlearningrag,
-  author  = {Wang, Shang and others},
+  author  = {Wang, Shang and Zhu, Tianqing and Ye, Dayong and Zhou, Wanlei},
   title   = {When Machine Unlearning Meets Retrieval-Augmented Generation ({RAG}): Keep Secret or Forget Knowledge?},
-  journal = {arXiv preprint arXiv:2410.15267},
-  year    = {2024}
+  journal = {IEEE Transactions on Dependable and Secure Computing},
+  volume  = {23},
+  number  = {2},
+  pages   = {2030--2045},
+  year    = {2026},
+  doi     = {10.1109/TDSC.2025.3620832}
 }
 
 % ---- Statistics ----
@@ -795,7 +860,8 @@
   volume  = {53},
   number  = {2},
   pages   = {567--578},
-  year    = {1997}
+  year    = {1997},
+  doi       = {10.2307/2533958}
 }
 @article{holm1979simple,
   author  = {Holm, Sture},
@@ -817,18 +883,18 @@
   doi         = {10.6028/NIST.SP.800-53r5}
 }
 
-% ---- Product documentation (grounding table; accessed October 2026; VERIFY each URL) ----
+% ---- Product documentation (grounding table; URLs and claims checked 25 Oct 2026) ----
 @misc{doc_langchain_summary,
   author       = {{LangChain}},
-  title        = {{ConversationSummaryBufferMemory} (API reference)},
-  howpublished = {\url{https://python.langchain.com/}},
+  title        = {Built-in middleware: Summarization ({SummarizationMiddleware}), {LangChain} 1.x},
+  howpublished = {\url{https://docs.langchain.com/oss/python/langchain/middleware/built-in}},
   note         = {Accessed October 2026},
   year         = {2026}
 }
 @misc{doc_llamaindex_memory,
   author       = {{LlamaIndex}},
-  title        = {Chat memory: {ChatSummaryMemoryBuffer}},
-  howpublished = {\url{https://docs.llamaindex.ai/}},
+  title        = {Chat Summary Memory Buffer ({ChatSummaryMemoryBuffer})},
+  howpublished = {\url{https://developers.llamaindex.ai/python/examples/agent/memory/summary_memory_buffer/}},
   note         = {Accessed October 2026},
   year         = {2026}
 }
@@ -841,43 +907,43 @@
 }
 @misc{doc_redisvl,
   author       = {{Redis}},
-  title        = {{RedisVL} {SemanticCache}},
-  howpublished = {\url{https://docs.redisvl.com/}},
+  title        = {Cache {LLM} Responses ({RedisVL} {SemanticCache})},
+  howpublished = {\url{https://docs.redisvl.com/en/latest/user_guide/03_llmcache.html}},
   note         = {Accessed October 2026},
   year         = {2026}
 }
 @misc{doc_chroma,
   author       = {{Chroma}},
-  title        = {Metadata filtering},
-  howpublished = {\url{https://docs.trychroma.com/}},
+  title        = {Metadata Filtering},
+  howpublished = {\url{https://docs.trychroma.com/docs/querying-collections/metadata-filtering}},
   note         = {Accessed October 2026},
   year         = {2026}
 }
 @misc{doc_qdrant,
   author       = {{Qdrant}},
   title        = {Filtering},
-  howpublished = {\url{https://qdrant.tech/documentation/concepts/filtering/}},
+  howpublished = {\url{https://qdrant.tech/documentation/search/filtering/}},
   note         = {Accessed October 2026},
   year         = {2026}
 }
 @misc{doc_pinecone,
   author       = {{Pinecone}},
   title        = {Filter by metadata},
-  howpublished = {\url{https://docs.pinecone.io/}},
+  howpublished = {\url{https://docs.pinecone.io/guides/search/filter-by-metadata}},
   note         = {Accessed October 2026},
   year         = {2026}
 }
 @misc{doc_azure_trimming,
   author       = {{Microsoft}},
-  title        = {Security filters for trimming results in {Azure AI Search}},
+  title        = {Security Filter Pattern -- {Azure AI Search}},
   howpublished = {\url{https://learn.microsoft.com/en-us/azure/search/search-security-trimming-for-azure-search}},
   note         = {Accessed October 2026},
   year         = {2026}
 }
 @misc{doc_graph_connectors,
   author       = {{Microsoft}},
-  title        = {Microsoft {Graph} connectors overview},
-  howpublished = {\url{https://learn.microsoft.com/en-us/graph/connecting-external-content-connectors-overview}},
+  title        = {Create, update, and delete items in a {Microsoft Graph} connection ({Microsoft 365 Copilot} connectors)},
+  howpublished = {\url{https://learn.microsoft.com/en-us/graph/connecting-external-content-manage-items}},
   note         = {Accessed October 2026},
   year         = {2026}
 }
