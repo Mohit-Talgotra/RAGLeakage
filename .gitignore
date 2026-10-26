@@ -16,4 +16,34 @@ results/*/runs/
 results/_superseded/
 results/_logs/
 results/smoke/
+
+# Second copy of results/ (~130 MB, includes raw runs).
+results-calc/
+
+# LaTeX build output.
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+
+# Paper scratch and backups.
+research_paper/_to_delete/
+research_paper/literature_review/pre_edit_backup/
+
+# Generated corpora (rebuild with scripts/generate_corpus.py --profile v3, build_enron_corpus.py).
+data/enron*/
+!data/enron_c/
+data/synthetic_v3*/
+research_paper/_pre_audit_backup/
+
+# Personal files that would de-anonymize a double-blind submission.
+BCSE497J_Project_I_ayush*.pdf
+
+# Grid run output.
+grid.log
 miscellaneous

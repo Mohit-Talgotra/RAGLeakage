@@ -1,0 +1,18 @@
+# p7_update on Enron with canaries.
+name: p7_update_enron
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: enron_c
+  sync: periodic:86400
+  events: 40
+  update_after_revoke: true
+  probe_readonly: true
+  probe_times: [0, 600, 3600, 14400, 43200, 86400, 172800]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  summarizer: llm
+grid:
+  preset: [baseline, authz_prefilter, epoch, full]

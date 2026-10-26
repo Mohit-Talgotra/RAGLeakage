@@ -1,0 +1,85 @@
+\section{Introduction}
+\label{sec:intro}
+
+Retrieval-augmented generation~\cite{lewis2020rag} lets a language model answer from a document
+collection it was not trained on. In enterprise deployments the collection is shared by several
+tenants and roles, so the application decides per request which documents a user may see. The
+common design copies document ACLs from the identity system into the vector index and filters
+retrieval on them~\cite{jeong2025permissionrag,chen2025integrating,zhong2026honeybee,doc_azure_trimming}.
+
+That design makes the identity system the source of truth and every other component a copy, and
+a RAG application makes several copies that outlive the request that created them. The index holds
+materialized ACLs, refreshed by a crawl or a webhook~\cite{doc_graph_connectors}. A semantic cache
+returns stored answers to similar questions~\cite{bang2023gptcache,doc_redisvl}. Chat memory keeps
+earlier turns and, after a few turns, a summary written by the model, which names no source
+document~\cite{doc_langchain_summary,doc_llamaindex_memory,packer2023memgpt}. When an administrator
+revokes access, the identity system changes at once; each copy changes only when something
+propagates the revocation to it. We call what the copies serve in the meantime
+\emph{post-revocation leakage}.
+
+\paragraph{Why it matters if the user saw it before.}
+A revoked user has, by definition, been allowed to read the document, so an obvious objection is
+that re-showing it reveals nothing. We take the objection seriously and measure around it. First,
+we separate \emph{re-disclosure} (secrets the user was shown before revocation) from \emph{new
+disclosure} (secrets of the document the user was never shown). Only the second is new information; the first is still a failure of complete
+mediation~\cite{saltzer1975protection}, which access-control standards require to be closed
+promptly when a user changes role or leaves~\cite{nist80053r5}, and which matters for users who no
+longer hold their copies. Second, derived state is shared: a cache entry or a laundered answer can
+reach a colleague who never had access. Third, a user who changes department (a \emph{mover})
+keeps an active account, so the window is open to an ordinary, authenticated client.
+
+\paragraph{Existence inference.}
+A separate question is whether the application reveals that a restricted document \emph{exists}
+without returning its content. Relevance scores, reranker confidence, latency and refusal wording
+can all depend on a hidden document~\cite{buttcher2005security,gelernter2015xs}, and caches and LLM
+serving have their own timing channels~\cite{gu2025auditing,song2025earlybird,zheng2024inputsnatch,carlini2024remote}.
+We measure existence inference as a distinguishing game between two worlds that differ only in the
+target document, for insiders (same tenant) and outsiders, and keep it separate from leakage
+throughout.
+
+\paragraph{Research questions.}
+\begin{itemize}
+\item[RQ1] Which derived artifacts disclose a revoked document, and how much of what they disclose
+is new to the user?
+\item[RQ2] How long does each leak last in the day after revocation, under a daily ACL crawl and
+default cache and session settings?
+\item[RQ3] What can an insider or outsider infer from response metadata about documents they cannot
+read?
+\item[RQ4] Which mitigations close each channel? How do read-time defenses for derived state
+(provenance taint, permission epochs, session flush) and published retrieval-time designs compare?
+\item[RQ5] What do the defenses cost the revoked user on documents it still holds, and in
+authorization load?
+\end{itemize}
+
+\paragraph{Contributions.}
+\begin{enumerate}
+\item A measurement procedure for post-revocation leakage per derived artifact, with paired
+revocation events, right-censored lifetimes, read-only probes that do not refresh what they
+measure, and a decomposition into re-disclosure and new disclosure (\cref{sec:method}).
+\item Measurements on real e-mail (Enron~\cite{klimt2004enron,ryan2025enronqa}) with
+Llama-3.1-8B (4-bit, served locally), whose chat memory is summarized by the same model, and a
+check of the two main leaks in an unmodified open-source stack (\cref{sec:results}).
+\item A twin-world measurement of existence inference that separates insiders from outsiders and
+content channels from metadata channels, with intervals clustered by target
+document~\cite{obuchowski1997clustered}, run with a deterministic stub generator (\cref{sec:rq3}).
+\item A comparison of read-time defenses for the derived state of a RAG pipeline (provenance taint
+and a per-user permission epoch) against a published retrieval-time design, on leakage, utility for
+the revoked user, and authorization load, with session flush and further designs in the stub harness
+(\cref{sec:defense,sec:rq4,sec:rq5}). The mechanisms are known
+(information-flow control~\cite{myers1997decentralized,elnikety2016thoth,costa2026fides}, complete
+mediation); the contribution is their instantiation for LLM-derived artifacts and the measured
+trade-off between them.
+\end{enumerate}
+
+\paragraph{Summary of findings.}
+\pending{Fill after the runs of configs/min/, at most five numbers: LM and LM\_new under baseline
+(p\_min\_enron), the retrieval-time design's residual leakage, the retained-document recall of epoch
+against full, insider existence AUC under baseline and under the defense (stub).}
+
+\paragraph{Scope.}
+The deployment model is grounded in documented framework and product behaviour
+(\cref{tab:grounding}), but every measurement comes from our testbed rather than from a production
+system, apart from the real-stack check (\cref{sec:res-realstack}). We use one 4-bit 8B model and
+100 revocation events per cell. Zero measured leakage means zero under a corpus-unique exact-match
+judge and an unvalidated model judge (\cref{sec:method}), for an adversary who queries the system.
+\cref{sec:limits} states where that does not hold.

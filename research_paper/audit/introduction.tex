@@ -1,0 +1,36 @@
+\section{Introduction}
+\label{sec:intro}
+
+\PARstart{R}{etrieval-augmented} generation~\cite{lewis2020rag} lets a language model answer from a document collection that the model was not trained on. In enterprise settings the collection is shared by several tenants and several roles, so the application must decide per request which documents a user may see. The usual design reuses the access-control model of the identity system~\cite{sandhu1996rbac}: document ACLs are copied into the vector index, and retrieval filters on them~\cite{jeong2025permissionrag,chen2025integrating,zhong2026honeybee}.
+
+That design makes the identity system the source of truth and every other component a copy. A RAG application makes several copies that outlive the request that created them. The index holds materialized ACLs that are refreshed on a schedule or by webhook. A semantic cache stores answers and serves them to later, similar questions. Chat memory stores earlier turns and, after a few turns, a summary that has no document identifiers. When an administrator revokes access, the identity system changes immediately, but each copy changes only when something propagates the revocation to it. We call the interval in which the copies still serve the revoked content \emph{post-revocation leakage}.
+
+A second, separate question is whether the application leaks the \emph{existence} of a restricted document through response metadata, without ever returning its content. Relevance scores, reranker confidence, response latency and refusal wording can differ depending on whether a hidden document is in the collection. Timing differences in LLM serving and in caches have been shown to leak information~\cite{gu2025auditing,song2025earlybird}, and similarity-based semantic caches have their own attack surface~\cite{zhang2026keycollision,afiffy2026semanticcache}. We measure how much of this a multi-tenant RAG application exposes.
+
+The two questions use different measurements. Post-revocation leakage is a property of time since a revocation event and is measured as the fraction of a document's secrets disclosed. Existence inference is a property of an attacker's ability to separate two worlds, with and without the document, and is measured as classification AUC. We keep them separate throughout.
+
+We call the study \sys, after the visual afterimage that persists once the stimulus is gone: derived copies keep showing a document after access to it has been removed.
+
+\paragraph{Research questions.}
+\begin{itemize}
+\item[RQ1] Which derived artifacts disclose a document after a user's access to it is revoked?
+\item[RQ2] How long does each leak last, and how does that depend on the ACL propagation policy and the cache settings?
+\item[RQ3] Can an API client infer from response metadata that a hidden document exists?
+\item[RQ4] Which mitigations close each channel, and does any of them backfire?
+\item[RQ5] What does the defense cost in answer quality and latency?
+\end{itemize}
+We repeat the revocation and existence experiments with a real LLM to check whether the stub generator changes the conclusions.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+\item A testbed and procedure for measuring post-revocation leakage per derived artifact, with paired revocation events, three revocation types, and a 48-hour horizon handled with right-censored survival estimates (\cref{sec:method}).
+\item A twin-world procedure for existence inference, with insider and outsider attackers, four probe strategies and learned attackers per observable channel, trained and tested on disjoint tenants (\cref{sec:method}).
+\item A defense, provenance-tainted revocation, that attaches a transitive source set to every derived artifact and enforces revocation eagerly and on every read, together with constant-shape responses (\cref{sec:defense}).
+\item Measurements on five research questions (\cref{sec:results}): which artifacts leak and for how long, how well an attacker infers existence, which mitigations matter, what the defense costs, and whether the findings change with a real LLM.
+\end{enumerate}
+
+\paragraph{Summary of findings.}
+In a standard deployment with a daily ACL crawl, a revoked user still recovers 63\% of the revoked document's secrets. The stale index, the semantic cache and chat memory each leak when the others are closed. Chat memory is the only artifact that does not heal within 48\,h. Without a defense, the reranker confidence alone identifies hidden documents at AUC 0.98. Under provenance-tainted revocation the measured leakage is zero in all 750 events of the main experiment and existence inference is at chance, at no loss of answer quality and a 360\,ms increase in median latency.
+
+\paragraph{Scope.}
+All main experiments use a synthetic, template-generated corpus and a deterministic stub generator. A repeat of two experiments with one small local model (Qwen2.5-3B-Instruct) is reported separately and is the only evidence on real generation. Zero measured leakage means zero under an exact-match judge in this testbed; it is not a guarantee. \Cref{sec:limits} lists the threats to validity.

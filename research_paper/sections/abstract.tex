@@ -1,0 +1,16 @@
+\begin{abstract}
+Multi-tenant retrieval-augmented generation (RAG) applications copy access-control state and
+document content into derived artifacts: ACL copies in the vector index, semantic-cache entries,
+and chat memory with model-written summaries. Revoking a user's access in the identity system does
+not revoke these copies. We measure what they disclose after revocation, separating secrets the user
+had already been shown (re-disclosure, a violation of complete mediation) from secrets the user had
+never seen. On real Enron e-mail with Llama-3.1-8B (4-bit, served locally), \pending{first result
+sentence: leakage and new disclosure under baseline, and through which artifact, from p\_min\_enron}.
+A published retrieval-time enforcement design removes the index channel and leaves \pending{Y} of the
+leakage. We then compare read-time defenses for derived state, provenance taint and a per-user
+permission epoch: \pending{defense result from p\_min\_enron: whether each reaches zero leakage and
+what it costs the revoked user on documents it still holds}. In an unmodified LangChain, Chroma and
+RedisVL deployment, a per-user semantic cache and agent memory both disclosed revoked e-mail although
+retrieval refused it. A user who pastes back what they once received defeats every artifact-level
+defense.
+\end{abstract}

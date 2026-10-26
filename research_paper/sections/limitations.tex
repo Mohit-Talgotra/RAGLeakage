@@ -1,0 +1,49 @@
+\section{Limitations}
+\label{sec:limits}
+
+\paragraph{Testbed, not production.}
+The deployment model follows documented framework and product behaviour (\cref{tab:grounding}), but
+every number except the real-stack check (\cref{sec:res-realstack}, 10 targets, two generators) comes from
+our pipeline. A deployment with different cache scoping, memory design or sync schedule will see
+different values; the per-artifact attribution and the lifetime structure are what we expect to
+transfer.
+
+\paragraph{One model, small samples.}
+The model run uses one model, Llama-3.1-8B in its default 4-bit build, with 100 revocation events per
+cell; larger and hosted models are not measured, and quantization may change what the model repeats.
+Intervals are correspondingly wide, and the broader defense comparison, the existence experiment and
+the update experiment use the stub generator only.
+
+\paragraph{Rewordings.}
+The model run's fresh-session probes use rewordings written by the generator model itself, which may
+vary less than real users' wording. The stub runs repeat questions verbatim, so their cache leakage
+holds for the repeated question only.
+
+\paragraph{Corpus.}
+The Enron text, questions and answers are real, but tenancy and permissions are derived from each
+message's recipients, not taken from a real access-control system, and facts are spans of benchmark
+answers. 457 of the 500 restricted Enron e-mails have no same-thread sibling, so few existence targets
+have a hard negative in the twin world. The corpus does not have the scale of an enterprise
+collection.
+
+\paragraph{One retrieval stack.}
+Every run uses the same MiniLM encoder and cross-encoder; cache thresholds are properties of that
+embedding space.
+
+\paragraph{Judging.}
+Exact matching of corpus-unique values misses paraphrased disclosure. The model judge is not
+validated against human labels, so we cannot bound how much exact matching misses.
+
+\paragraph{Attacker strength.}
+The existence attacker is gradient boosting on hand-designed features with four fixed probes, trained
+on shadow tenants. An adaptive attacker that repeats probes, or one with unlimited queries, may do
+better, so chance-level results are statements about this attacker.
+
+\paragraph{Timing.}
+Time between probes is simulated, and the existence experiment's generation latency comes from the
+stub's latency model, so its timing results say nothing about a served model.
+
+\paragraph{Scope of the defenses.}
+They cover the index, the cache and chat memory. Logs, exports, fine-tuning data and tool outputs
+(assumption A2) are out of scope, and no artifact-level mechanism stops a user who paraphrases what
+it once read (A1).

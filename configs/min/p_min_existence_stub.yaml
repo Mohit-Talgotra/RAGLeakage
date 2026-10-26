@@ -1,0 +1,17 @@
+# Stub copy of p3_existence_enron (train e1-e3, test e4-e5 by the default split; never pass
+# --train-tenants). Most Enron targets (457 of 500) have no same-thread sibling.
+name: p_min_existence_stub
+experiment: existence
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: enron_c
+  exposure: with_reranker
+  attackers: [insider, outsider]
+  victim_warmup: 0.5
+  sync: live
+  targets_per_tenant: 12
+  llm_backend: stub
+grid:
+  preset: [strawman, baseline, baseline_shared, legacy, epoch, full, full_user]

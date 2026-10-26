@@ -1,0 +1,198 @@
+\section{Results}
+\label{sec:results}
+
+Unless stated, results use the stub generator. Brackets are 95\% bootstrap intervals. Where a paired comparison is reported, $p$-values come from the paired bootstrap.
+
+\subsection{RQ1: Which derived artifacts leak after revocation?}
+\label{sec:rq1}
+We start from the full defense and re-open one artifact at a time under a daily ACL crawl (\cref{tab:rq1}, \cref{fig:rq1}).
+
+\input{tables/t01_rq1}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig1_rq1_leakage_by_artifact.pdf}
+\caption{Mean leakage magnitude after revocation when a single derived artifact is re-opened from the full defense (250 events per bar; whiskers are 95\% bootstrap intervals). Index and cache leakage does not depend on revocation type.}
+\label{fig:rq1}
+\end{figure}
+
+\paragraph{Observation.}
+With every artifact closed, leakage is exactly zero in all 750 events. Each artifact leaks when re-opened alone: the stale index copy discloses 0.627 of the target's secrets, the cache 0.491, and memory 0.366--0.505 depending on revocation type. All non-zero rows differ from the full defense with $p<0.001$ (paired, 250 pairs; no bootstrap resample crossed zero). Index leaks have a median lifetime of 43{,}200\,s, cache leaks 3600\,s, equal to the TTL. Memory leaks do not heal: 108, 134 and 160 of 250 events (43\%, 54\%, 64\%) are still leaking at 48\,h for single-document, role and offboarding revocation.
+
+\paragraph{Blast radius.}
+For the target document, revocation type changes memory leakage but not index or cache leakage. Across all documents the victim lost, it changes the picture (\cref{tab:blast}): on offboarding, an attacker recovers 0.858 [0.842, 0.874] of the secrets of about 4.76 lost documents per event through the index, and 0.820 [0.804, 0.835] of about 4.63 documents through the cache. For single-document and role revocation the values equal the target-only values. This follows from the warm-up design: the four filler documents are public or internal, while role revocation removes a group that grants restricted documents, so among the warmed-up documents the victim loses only the target under both revocation types. Role revocation is therefore not distinguished from single-document revocation by the blast-radius probes in this experiment. A memory row is omitted because the extra probes are fresh-session questions that do not reach memory; the memory value for offboarding (0.215, 1.08 documents) is therefore an undercount.
+
+\input{tables/t02_blast}
+
+\paragraph{Interpretation.}
+The measurements support treating revocation as a problem of several independent copies: closing the index alone leaves the cache and memory open, and the reverse. The larger total for offboarding is consistent with the victim having lost more documents that had been used; it does not indicate a different mechanism.
+
+\subsection{RQ2: How long does leakage last?}
+\label{sec:rq2}
+
+\subsubsection{Propagation policy}
+\Cref{tab:rq2sync} and \cref{fig:sync} report the baseline preset (no revocation hooks) while varying the ACL sync policy and cache TTL.
+
+\input{tables/t03_rq2sync}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig2_rq2_survival_sync_policies.pdf}
+\caption{Share of events still leaking versus hours since revocation (Kaplan--Meier), baseline preset, one panel per sync policy: periodic crawl every 3600\,s and 86400\,s, event-driven sync with no lost webhooks, and event-driven sync with 5\% lost webhooks and a daily backstop (5\% lost: 5\% of webhooks lost, daily backstop crawl). Curves are the three cache TTLs; the 600\,s curve is dashed. Curves that plateau near 0.4 correspond to events leaking through chat memory.}
+\label{fig:sync}
+\end{figure*}
+
+\paragraph{Observation.}
+The median index-leak lifetime is 1800\,s for the hourly crawl and 43{,}200\,s for the daily crawl, which equals $\Delta/2$ in both cases. Against the hourly crawl, the daily crawl adds $\Delta\LM=+0.036$ [0.016, 0.060] (seed-clustered interval [0.008, 0.073]; Wilcoxon $p=0.003$). Event-driven sync removes index leakage ($\LM_{\text{index}}=0.000$) and lowers total leakage by $0.111$ [0.076, 0.145], yet $\LM$ stays at 0.506 because cache and memory are unaffected. With 5\% of webhooks lost, $\LM_{\text{index}}$ is 0.034 [0.014, 0.058] but those leaks last a median of 64{,}800\,s (18\,h), until the daily backstop. Cache TTL does not change $\LM$ ($\Delta\LM=0.000$ between TTLs). Memory leakage ($\LM_{\text{memory}}$ 0.31--0.33) persists: 80--86 of 200 events (40--43\%) still leak at 48\,h.
+
+\paragraph{Interpretation.}
+The agreement with $\Delta/2$ checks the simulator against a closed form; the probe grid contains 1800\,s and 43{,}200\,s, so the agreement holds to within grid resolution and is not an independent finding. The substantive observations are that event-driven sync alone does not close revocation and that a small webhook loss rate produces a long tail rather than a small uniform increase.
+
+\paragraph{Caveat on the 86{,}400\,s TTL.}
+When the TTL is at least the sync period, the cache answers before the index is reached, so the index lifetime is masked and not reported. With a TTL of 86{,}400\,s the overall lifetime is 129{,}600\,s: answers generated after revocation from memory or the stale index are themselves cached, and a same-session probe at 24\,h hits an entry written by the 0\,s probe. The leak outlives the original entry by one more TTL.
+
+\subsubsection{Cache similarity threshold and TTL}
+\Cref{tab:rq2cache} and \cref{fig:cache} isolate the cache (baseline preset, live ACLs, no summaries) with reworded fresh-session probes.
+
+\input{tables/t04_rq2cache}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig3_rq2_survival_cache_sweep.png}
+\caption{Share of events still leaking versus hours since revocation, one panel per cache similarity threshold (panel titles \texttt{cache\_threshold=}), curves per cache TTL. Baseline preset, live ACLs, reworded probes.}
+\label{fig:cache}
+\end{figure*}
+
+\paragraph{Observation.}
+Raising the threshold lowers leakage monotonically, from 0.464 at 0.80 to 0.254 at 0.95, and every step differs from 0.80 with $p\le0.002$. Even at 0.95 a quarter of the secrets leak. The TTL does not change $\LM$ (within $\pm0.004$ across 600, 3600 and 21{,}600\,s) but fixes the duration: the median lifetime of leaking events equals the TTL (600\,s, 3600\,s, and 21{,}600\,s, the last reported at the next probe time, 28{,}800\,s).
+
+\paragraph{Interpretation.}
+Tuning threshold or TTL changes how much or how long the cache leaks but does not remove it, because a reworded question remains similar enough to a cached one. Closing the channel requires revocation to reach the entry, through eviction or a lazy check.
+
+\subsection{RQ3: Can an attacker infer that a hidden document exists?}
+\label{sec:rq3}
+
+\input{tables/t05_rq3}
+\input{tables/t06_rq3chan}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig4_rq3_roc.png}
+\caption{ROC curves of the per-channel learned attackers, one panel per preset (stub generator, with-reranker profile, insider and outsider pooled). The grey diagonal is chance; the legend in the first panel applies to all panels.}
+\label{fig:roc}
+\end{figure*}
+
+\paragraph{Observation.}
+For \texttt{strawman} the combined attacker reaches AUC 0.698 with text only, 0.924 with sources and 0.983 [0.980, 0.987] with the reranker confidence, detecting 68.9\% of hidden documents at 1\% FPR (\cref{tab:rq3}, \cref{fig:roc}). By channel (\cref{tab:rq3chan}), the reranker alone gives 0.983 and relevance scores 0.883; latency (0.555) and refusal wording (0.576) are weaker. Trial-level AUC, averaging the four probes, is 0.706, 0.972 and 1.000 for the three profiles. For \texttt{baseline} and \texttt{legacy} the combined AUC is 0.61 and 0.59 and does not depend on the profile; the content channel is the strongest (0.615 and 0.602) while score, reranker and latency channels are at 0.50--0.54. For \texttt{full}, AUC is 0.495--0.500 on every channel and profile and TPR at 1\% FPR is 0.008.
+
+\paragraph{Interpretation.}
+Without defenses, response metadata is sufficient to infer existence at near-perfect accuracy. Under the ACL pre-filter the score channels collapse to near chance, and what remains in typical deployments is answer content. The ablation in \cref{sec:rq4} indicates that a cache warmed by a legitimate user is a source of this content signal. The legacy mitigations (score bands, uniform refusal, 30\,ms floor) change the combined AUC only from 0.612 to 0.592.
+
+\subsection{RQ4: What does each mitigation contribute?}
+\label{sec:rq4}
+
+\subsubsection{Revocation side}
+\Cref{tab:rq4rev} removes one switch at a time from the full defense under lossy webhooks.
+
+\input{tables/t07_rq4rev}
+
+\paragraph{Observation.}
+Removing transitive taint gives $\LM=0.337$ [0.285, 0.389] ($p<0.001$ against full), through memory ($\LM_{\text{memory}}$ 0.337) and through cache entries made from memory-derived answers ($\LM_{\text{cache}}$ 0.259); 86 of 200 events (43\%) still leak at 48\,h. Removing the live ACL check gives 0.034 [0.014, 0.058], the lost-webhook revocations leaking through the stale index until the daily crawl (median 86{,}400\,s). The same mechanism gives 64{,}800\,s in \cref{tab:rq2sync}; the difference comes from the probe grids. The sync-policy experiment probes at 18\,h, and this experiment uses the default grid, whose first probe after 12\,h is at 24\,h. Removing any one of the other five switches leaves $\LM$ at 0.000.
+
+\paragraph{Interpretation.}
+Transitive taint is the component without which the defense fails substantially. That removing only eviction or only the lazy check changes nothing indicates that each covers for the other in this testbed; it does not show that either is unnecessary, since each alone was sufficient here under these revocation types.
+
+\subsubsection{Inference side}
+\Cref{tab:rq4eia} and \cref{fig:heat} remove one metadata mitigation at a time, with the ACL pre-filter on or off and under four response variants.
+
+\input{tables/t08_rq4eia}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.82\textwidth]{fig5_rq4_ablation_heatmap.pdf}
+\caption{Combined-attacker AUC (with-reranker profile) when one metadata mitigation is removed from the full defense, with the ACL pre-filter on (left) or off (right), under four response variants. Same values as \cref{tab:rq4eia}.}
+\label{fig:heat}
+\end{figure*}
+
+\paragraph{Observation.}
+With the pre-filter on, every ablation and variant stays between 0.483 and 0.538. With it off, AUC is 0.857 [0.841, 0.871] even with every other mitigation active, the reranker channel being 0.79. Without score quantization and with a post-filter, AUC is 0.993 [0.989, 0.995] and TPR at 1\% FPR is 0.90. With a post-filter, no latency padding and the fast-refusal variant, AUC rises from 0.854 to 0.897 [0.885, 0.910] and the latency channel from 0.52 to 0.584 [0.559, 0.610]. With the pre-filter on, removing the lazy cache check gives 0.538 [0.512, 0.562]; the 2\,s deadline gives exactly 0.500.
+
+\paragraph{Interpretation.}
+The ACL pre-filter is the dominant mitigation against existence inference in this testbed. Score quantization matters only when the pre-filter is off. The fast refusal path is a case where an optimization raises leakage: skipping generation on refusals makes them measurably faster, and padding or a deadline removes the difference. Timing is otherwise a weak channel with the stub generator (at most about 0.58).
+
+\subsection{RQ5: What does the defense cost?}
+\label{sec:rq5}
+
+\input{tables/t09_rq5}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig6_rq5_pareto.pdf}
+\caption{Post-revocation leakage versus median latency for the four presets (leakage: 250 events, daily crawl, whiskers are 95\% bootstrap intervals; latency: 3000 authorized queries). Only \texttt{full} reaches zero leakage.}
+\label{fig:pareto}
+\end{figure}
+
+\paragraph{Observation.}
+\Cref{tab:rq5} and \cref{fig:pareto} summarize cost and leakage per preset. Recall@5, nDCG@5, correctness and over-refusal are identical for \texttt{baseline}, \texttt{legacy} and \texttt{full} (0.993, 0.978, 0.947, 0.047). The cost of \texttt{full} is median latency, 1000\,ms against 640\,ms for \texttt{baseline} (+360\,ms), from padding to 500\,ms buckets; p95 is 1500 against 1493\,ms, and the cache hit rate is 0.930 against 0.952. \texttt{legacy} costs 28\,ms of median latency and leaves leakage at 0.634, the same as \texttt{baseline}. Paired against \texttt{strawman}, leakage changes by $+0.014$ [0.002, 0.029] for \texttt{baseline}, $+0.014$ [0.001, 0.030] for \texttt{legacy} and $-0.620$ [$-0.659$, $-0.576$] for \texttt{full}. The cache hit rate is high by design, as every document is asked twice.
+
+\paragraph{Observation, retrieval quality.}
+\texttt{strawman} has lower retrieval quality (nDCG@5 0.846 against 0.978). A plausible explanation, which we did not test, is that flat cross-tenant retrieval fills the top-$k$ with other tenants' documents.
+
+\subsection{Real-LLM check}
+\label{sec:real}
+
+\input{tables/t10_realllm}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig7_real_llm_survival.pdf}
+\caption{Share of events still leaking versus hours since revocation, stub generator versus Qwen2.5-3B, baseline and full presets, daily ACL crawl (100 paired events per curve). The two \texttt{full} curves overlap at zero.}
+\label{fig:real}
+\end{figure}
+
+\paragraph{Revocation.}
+On 100 paired events with the daily crawl (\cref{tab:realllm}, \cref{fig:real}), Qwen2.5-3B leaks more than the stub under \texttt{baseline}: $\LM=0.743$ [0.711, 0.771] against 0.646 [0.584, 0.702], a paired difference of $+0.097$ [0.032, 0.169] (seed-clustered interval [0.011, 0.192]; Wilcoxon $p=0.004$). The gap is in memory ($\LM_{\text{memory}}$ 0.715 against 0.305). The real model refused 1 of 100 same-session ``remind me'' probes at 48\,h against 21 for the stub, and 96\% of events were still leaking at 48\,h against 38\%. Under \texttt{full}, leakage is exactly 0.000 for both generators. The index-leak median lifetime is 43{,}200\,s for both.
+
+\paragraph{Judge check.}
+We re-judged Qwen's responses with a normalized match that ignores currency symbols, commas and formatting. Among fact values the exact-match judge missed, none appeared in reformatted form. Qwen reproduces the canary string less often than the stub (48 against 101 of 2400 probe responses), so its $\LM$ is, if anything, slightly undercounted by the exact-match judge.
+
+\input{tables/t11_realllm_eia}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig8_real_llm_rq3_roc.pdf}
+\caption{ROC curves of the per-channel learned attackers for existence inference with Qwen2.5-3B, one panel per preset (with-reranker profile, insider and outsider pooled; 3 seeds, 768 test probes per cell). Legend values are AUCs; the grey diagonal is chance.}
+\label{fig:realroc}
+\end{figure*}
+
+\paragraph{Existence inference.}
+The pattern matches the stub (\cref{tab:realllm-eia}, \cref{fig:realroc}): 0.973 [0.959, 0.984] for \texttt{strawman}, 0.605 [0.563, 0.645] for \texttt{baseline} and 0.513 [0.474, 0.552] for \texttt{full}, an interval that includes 0.5. The difference is the latency channel, which becomes usable without padding (0.659 for \texttt{strawman}, 0.596 for \texttt{baseline}) because a refusal returns much faster than a real generation, and returns to chance under the defense (0.507 [0.468, 0.546]).
+
+\subsection{Robustness and cost experiments}
+\label{sec:res-review}
+\todo{Results pending: the runs in the lower part of \cref{tab:grid} (scripts/run\_review.sh). Fill each paragraph from results/<config>/analysis/summary.md, and update RQ1 (\cref{tab:rq1,tab:blast}) and the revocation ablation (\cref{tab:rq4rev}) from the re-runs 1$'$ and 4a$'$, which replace the current numbers.}
+
+\paragraph{Role revocation and blast radius.}
+\todo{rq1\_surfaces re-run: LM and LM\textsubscript{all lost} per re-opened artifact for role revocation with restricted warm-up; whether role now differs from single-document revocation. Remove the warm-up explanation in \cref{sec:rq1} once replaced.}
+
+\paragraph{Collateral cost of transitive taint.}
+\todo{rq5\_collateral(\_7b): correctness and refusal rate on retained documents, same and fresh session, per preset, paired against baseline; number of purged items.}
+
+\paragraph{Paste-back laundering.}
+\todo{rq6\_taint\_stress: laundering success for the revoked victim; LM\textsubscript{colleague} with query fingerprinting off and on, per generator.}
+
+\paragraph{Literature baselines.}
+\todo{rq\_baselines\_revocation and rq\_baselines\_existence: LM by artifact and existence AUC for authz\_prefilter and authz\_postfilter against baseline and full; add rows to \cref{tab:presets,tab:rq5} and points to \cref{fig:pareto}.}
+
+\paragraph{Authorization overhead.}
+\todo{rq5\_overhead: p50/p95 latency and authorization calls per query at 0, 2 and 10\,ms IAM round trip.}
+
+\paragraph{Larger and hosted generators.}
+\todo{model\_grid\_7b, rq3\_existence\_7b, model\_grid\_groq: add columns to \cref{tab:realllm,tab:realllm-eia} and curves to \cref{fig:real,fig:realroc}.}
+
+\paragraph{Paraphrase judge.}
+\todo{judge\_sample: extra leak rate under the LLM judge per cell; judge precision from the 150 hand-labelled items. Revise the ``lower bound'' statements in \cref{sec:limits} accordingly.}
+
+\paragraph{Real text (Enron).}
+\todo{enron\_revocation(\_7b), enron\_existence: LM for baseline and full, single-document and role revocation; existence AUC per preset.}
+

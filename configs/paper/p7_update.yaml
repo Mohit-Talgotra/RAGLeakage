@@ -1,0 +1,19 @@
+# C1: the document changes after revocation. Whatever the victim receives from the new
+# version is information they never had (LM_update). Enron is p7_update_enron.
+name: p7_update
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  sync: periodic:86400
+  events: 40
+  update_after_revoke: true
+  probe_readonly: true
+  probe_times: [0, 600, 3600, 14400, 43200, 86400, 172800]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  summarizer: llm
+grid:
+  preset: [baseline, authz_prefilter, epoch, full]

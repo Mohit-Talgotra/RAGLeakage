@@ -1,0 +1,21 @@
+# Model scale: does the picture hold from 3B to 32B and for a hosted model? Serve the local
+# models with vLLM behind OLLAMA_BASE_URL (OpenAI-compatible) and use the HF model ids there.
+# gpt-4o-mini needs OPENAI_API_KEY; drop it if not available.
+name: p8_models
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  sync: periodic:86400
+  events: 40
+  probe_readonly: true
+  probe_unseen: true
+  probe_paraphrase: file
+  probe_times: [0, 600, 3600, 14400, 43200, 86400, 172800]
+  llm_backend: ollama
+  summarizer: llm
+grid:
+  llm_model: [qwen2.5:3b, llama3.1:8b, qwen2.5:7b, qwen2.5:32b]
+  preset: [baseline, full]

@@ -1,0 +1,18 @@
+# RQ2b: cache similarity threshold and TTL with natural rewordings (not 7 templates).
+name: p2_cache
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  preset: baseline
+  sync: live
+  summary_after: 0
+  events: 40
+  probe_readonly: true
+  probe_paraphrase: file
+  llm_backend: stub
+grid:
+  cache_threshold: [0.80, 0.85, 0.90, 0.95]
+  cache_ttl_s: [600, 3600, 21600]

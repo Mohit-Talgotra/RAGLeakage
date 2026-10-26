@@ -1,0 +1,33 @@
+\section{Limitations and Threats to Validity}
+\label{sec:limits}
+\todo{Revise the corpus, generator and judge paragraphs, and the conclusion, once the results of \cref{sec:res-review} are in.}
+
+\paragraph{Synthetic corpus.}
+Documents are template-generated, five tenants of 100 documents each. Real enterprise text is less regular, and secrets in it are harder to define and to match. A real-data track was not run, so absolute leakage values should not be transferred to real deployments.
+
+\paragraph{Generator.}
+RQ1--RQ5 use a deterministic stub. The real-model check covers one small local model on two configurations for revocation and three for existence. It supports the findings and shows the stub underestimates memory leakage, but it does not show that larger hosted models behave alike. Larger models were not run.
+
+\paragraph{One embedder and one reranker.}
+All runs use the same MiniLM encoder and cross-encoder. Thresholds such as 0.90 depend on the embedding space, so the cache sweep values do not transfer to other encoders.
+
+\paragraph{Simulated time and latency.}
+Time is virtual and latency is real compute plus a modelled LLM delay (real delay in the Qwen runs). The attacker sees latency rounded to 1\,ms, a stand-in for network jitter. Real networks are noisier, which would lower timing AUCs; with the stub the timing values are therefore an upper bound, and with Qwen they are indicative.
+
+\paragraph{Exact-match judge.}
+A secret counts as leaked only if its exact value, or the canary, appears. Paraphrased disclosure (``about two billion'') is not counted, so $\LM$ is a lower bound, and the zero for the full defense means zero by this judge. A normalized-match check on Qwen output found no missed reformatted values, but a semantic judge was not run.
+
+\paragraph{Probe grid.}
+Lifetimes are resolved to the probe schedule only (\cref{sec:setup}); a reported median is the first probe time with no leak. Coarse steps at late times, for example between 12\,h and 24\,h, bound how precisely long tails can be stated.
+
+\paragraph{Attacker strength.}
+The learned attacker is gradient boosting on hand-designed features with four probes per target. A stronger or adaptive attacker may do better, so AUCs are lower bounds on achievable inference; the chance-level result for the full defense is a statement about this attacker.
+
+\paragraph{Metric structure.}
+Per-artifact $\LM$ values are not exclusive and do not sum. The blast-radius probes do not reach memory, so memory is undercounted for offboarding. Lifetimes of events censored at 48\,h are lower bounds.
+
+\paragraph{Scope of the defense.}
+Provenance-tainted revocation addresses the three derived artifacts studied. It does not cover other places where content may persist (logs, fine-tuning data, downstream tools), and was evaluated against revocation only, not against an adversary who also manipulates what is cached.
+
+\paragraph{Evidence from one machine.}
+All runs come from one machine and software stack. Event sampling is paired and seeded, and real generations are cached for replay, but we have not run an independent replication. The raw per-query logs (about 1.4\,GB) are not part of this submission; the configurations, analysis outputs and corpus generator are released as described in the data availability statement.

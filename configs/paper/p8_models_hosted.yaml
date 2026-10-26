@@ -1,0 +1,19 @@
+# Hosted model, same events as p8_models.
+name: p8_models_hosted
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  sync: periodic:86400
+  events: 40
+  probe_readonly: true
+  probe_unseen: true
+  probe_paraphrase: file
+  probe_times: [0, 600, 3600, 14400, 43200, 86400, 172800]
+  llm_backend: openai
+  llm_model: gpt-4o-mini
+  summarizer: llm
+grid:
+  preset: [baseline, full]

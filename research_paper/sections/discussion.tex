@@ -1,0 +1,35 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{Revocation is a property of every copy.}
+\pending{D1: one paragraph from RQ1/RQ2: each artifact heals on its own schedule (crawl period, TTL,
+session retention), so fixing one propagation path leaves the others open; the retrieval-time design
+is correct about the artifact it owns.}
+
+\paragraph{What a defense for derived state has to buy.}
+Once read-time checks are in place, zero leakage is cheap: a per-user epoch reaches it with a few lines
+of code. A finer mechanism has to earn its place on what it lets the user keep. \pending{D2: state
+the measured retained-recall gap between epoch and full (model run) and between epoch, flush and full
+(stub), and whether the gap justifies taint.} Finer taint, at the level of summary sentences or of
+the memory items an answer actually used, needs attribution that real models do not provide; context
+attribution~\cite{cohenwang2024contextcite} and permissive information-flow
+analysis~\cite{siddiqui2024permissive} are the candidate routes, and each needs its own soundness
+argument.
+
+\paragraph{Shared state turns re-disclosure into new disclosure.}
+Re-showing a user what it already saw gives it nothing new, but the same mechanism writes revoked
+content into state that other users read: in the pilot, a tenant-shared cache served restricted
+answers to insiders who never had access (\cref{app:pilot}). Agent memory that keeps tool outputs
+goes further for the revoked user itself, since it holds retrieved text the user may never have been
+shown (\cref{sec:res-realstack}).
+
+\paragraph{Metadata and content are separate problems.}
+With a pre-filter, the score and reranker channels carry no signal because the target is invisible in
+both worlds; what remains is shared state and timing.
+
+\paragraph{Practical guidance, limited to what was measured.}
+Scope semantic caches per user, or check every hit against live authorization. Enforce revocation on
+read against live identity state rather than waiting for propagation. Bound chat-session retention,
+and treat tool outputs kept in agent memory as copies of the source documents. Filter by ACL before
+scoring, and never expose scores of withheld candidates. Budget separately for users who re-type
+what they already read.

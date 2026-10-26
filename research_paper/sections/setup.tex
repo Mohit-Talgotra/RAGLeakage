@@ -1,0 +1,37 @@
+\section{Experimental Setup}
+\label{sec:setup}
+
+\Cref{tab:grid} lists the experiments; each row is one configuration file in \texttt{configs/min/} of
+the released repository. All use the Enron corpus with canaries and five seeds, which re-draw
+revocation events from the one corpus. The model run has 100 revocation events per cell (5 seeds
+$\times$ 20); the stub runs have 200.
+
+\begin{table*}[t]
+\centering
+\caption{Experiments, all on Enron with canaries. Model: L8 = Llama-3.1-8B (4-bit, served locally);
+stub = deterministic validation harness. Units: revocation events per cell, or test probes for
+existence.}
+\label{tab:grid}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llp{9.0cm}lr@{}}
+\toprule
+RQ & Model & Grid & Config & Units \\
+\midrule
+1, 2, 4, 5 & L8 & preset (baseline, authz\_prefilter, epoch, full) $\times$ single-document revocation; daily crawl; model-written summaries; reworded fresh-session probes at 0\,s, 1\,h, 24\,h, including never-asked facts and retained documents & \texttt{p\_min\_enron} & 100 \\
+-- & L8 & same cells, 2 seeds $\times$ 1 event; timing check only, not reported & \texttt{p\_min\_pilot} & 2 \\
+4, 5 & stub & preset (baseline, baseline\_shared, authz\_prefilter, authz\_postfilter, epoch, flush, full) $\times$ single-document revocation; extractive summaries; one-sentence answers; probes from 0\,s to 48\,h & \texttt{p\_min\_defenses\_stub} & 200 \\
+3 & stub & preset (strawman, baseline, baseline\_shared, legacy, epoch, full, full\_user); insider and outsider; train e1--e3, test e4--e5 & \texttt{p\_min\_existence\_stub} & \pending{n} \\
+C1 & stub & document edited after revocation; baseline, authz\_prefilter, epoch, full & \texttt{p\_min\_update\_stub} & 200 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Probe schedule.}
+The model run probes 0\,s, 1\,h and 24\,h after revocation; the stub runs probe at 0\,s, 10\,min,
+1\,h, 4\,h, 12\,h, 24\,h and 48\,h.
+
+\paragraph{Environment.}
+One laptop with an RTX 3050 laptop GPU (6\,GB) running Ollama \pending{version} with the default
+4-bit build of Llama-3.1-8B; Python 3.14, scikit-learn 1.9.1, ChromaDB 1.5.9, sentence-transformers
+6.1.0. Runs are sequential. Latency results are comparable within the paper only.

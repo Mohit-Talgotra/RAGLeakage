@@ -16,7 +16,11 @@ revocation; the index metadata changes only when the SyncPolicy runs:
 
 Retrieval:
 - prefilter=True  : Chroma `where` on tenant + acl__<user> (stale ACL is what filters)
-- prefilter=False : flat top-k over every tenant; caller post-filters on `index_allows`
+- prefilter=False : top-k over the user's tenant (or every tenant with cross_tenant, the
+                    strawman); caller post-filters on `index_allows`
+
+Document updates: update_doc() swaps a document's chunks for a new version (the revocation
+experiment's update_after_revoke, audit C1). The old version comes back on the next rebind.
 """
 
 from __future__ import annotations
@@ -108,6 +112,8 @@ class VectorIndex:
         for c in chunks:
             self._doc_chunks.setdefault(c.doc_id, []).append(c.chunk_id)
         self._removed: set[str] = set()
+        self._original: dict[str, list[Chunk]] = {}   # doc_id -> chunks before update_doc
+        self._orig_emb: dict[str, np.ndarray] = {}
         self.dropped_events = 0
         self.applied_events = 0
 
@@ -151,6 +157,9 @@ class VectorIndex:
         and start the crawl cycle at a random phase so revocations land uniformly within it."""
         self.acm = acm
         self.restore_docs(list(self._removed))
+        for doc_id, chunks in list(self._original.items()):
+            self._swap(doc_id, chunks, [self._orig_emb[c.chunk_id] for c in chunks])
+        self._original.clear()
         self._sync_docs(list(self._doc_chunks))
         interval = self.policy.interval_s if self.policy.kind == "periodic" else self.policy.backstop_s
         self._last_full_sync = self.clock.now() - (self.rng.uniform(0, interval) if interval else 0.0)
@@ -170,6 +179,29 @@ class VectorIndex:
         back = [d for d in doc_ids if d in self._removed]
         self._removed -= set(back)
         self._add_chunks([c for d in back for c in self._doc_chunks[d]])
+
+    # ---- Document updates -------------------------------------------------------
+
+    def update_doc(self, doc_id: str, chunks: list[Chunk], embeddings) -> None:
+        """Replace a document's chunks (same doc_id and ACL) with a new version."""
+        if doc_id not in self._original:
+            self._original[doc_id] = [self._chunks[c] for c in self._doc_chunks[doc_id]]
+            self._orig_emb.update({c: self._emb[c] for c in self._doc_chunks[doc_id]})
+        self._swap(doc_id, chunks, embeddings)
+
+    def _swap(self, doc_id: str, chunks: list[Chunk], embeddings) -> None:
+        old = self._doc_chunks[doc_id]
+        if doc_id not in self._removed:
+            self._col.delete(ids=old)
+        for c in old:
+            self._chunks.pop(c, None)
+            self._emb.pop(c, None)
+        self._doc_chunks[doc_id] = [c.chunk_id for c in chunks]
+        for c, e in zip(chunks, embeddings):
+            self._chunks[c.chunk_id] = c
+            self._emb[c.chunk_id] = e
+        if doc_id not in self._removed:
+            self._add_chunks(self._doc_chunks[doc_id])
 
     # ---- ACL propagation ----------------------------------------------------
 
@@ -223,19 +255,24 @@ class VectorIndex:
     # ---- Retrieval ----------------------------------------------------------
 
     def query(self, q_emb: np.ndarray, top_k: int, user_id: str, tenant_id: Optional[str],
-              prefilter: bool) -> list[Candidate]:
+              prefilter: bool, cross_tenant: bool = False) -> list[Candidate]:
         self.tick()
         where = None
         if prefilter:
             where = {"$and": [{"tenant_id": tenant_id}, {acl_key(user_id): True}]}
+        elif not cross_tenant:
+            where = {"tenant_id": tenant_id}
         res = self._col.query(
             query_embeddings=[np.asarray(q_emb, dtype=np.float32).tolist()],
-            n_results=top_k,
+            n_results=top_k + 8,
             where=where,
             include=["distances", "metadatas"],
         )
+        # Chroma returns exactly tied candidates in arbitrary order, so runs did not reproduce;
+        # break ties by chunk id (the extra candidates cover ties across the top-k cut).
+        hits = sorted(zip(res["ids"][0], res["distances"][0], res["metadatas"][0]), key=lambda h: (h[1], h[0]))
         out = []
-        for cid, dist, meta in zip(res["ids"][0], res["distances"][0], res["metadatas"][0]):
+        for cid, dist, meta in hits[:top_k]:
             c = self._chunks[cid]
             out.append(Candidate(
                 chunk_id=cid, doc_id=c.doc_id, tenant_id=c.tenant_id, title=c.title, text=c.text,

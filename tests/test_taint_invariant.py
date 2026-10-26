@@ -48,8 +48,12 @@ def _random_sessions(pipe, client, n_queries=60, seed=0):
         client.ask(user, f"s{i % 3}", q)
 
 
-def test_invariant_holds_with_transitive_taint(make_pipeline):
-    pipe, client = make_pipeline("full", summary_after=4, keep_recent=2)
+import pytest
+
+
+@pytest.mark.parametrize("name", ["full", "full_fine"])
+def test_invariant_holds_with_transitive_taint(make_pipeline, name):
+    pipe, client = make_pipeline(name, summary_after=4, keep_recent=2)
     _random_sessions(pipe, client)
     holding, bad = _check(pipe)
     assert holding > 0, "vacuous: no artifact carried a restricted secret"

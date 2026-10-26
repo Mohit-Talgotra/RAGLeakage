@@ -1,0 +1,18 @@
+\begin{table*}[tbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Existence inference (twin worlds, held-out tenants, 4800 test probes per cell):
+AUC of the combined learned attacker by exposure profile, and TPR at 1\% FPR (with reranker).}
+\label{tab:rq3}
+\begin{tabular}{lcccc}
+\toprule
+Preset & Text only & + Sources & + Reranker & TPR@1\%FPR \\
+\midrule
+strawman & 0.698 [0.684, 0.713] & 0.924 [0.917, 0.931] & \textbf{0.983} [0.980, 0.987] & 0.689 \\
+baseline & 0.611 [0.594, 0.625] & 0.612 [0.596, 0.626] & 0.612 [0.596, 0.627] & 0.157 \\
+legacy & 0.592 [0.576, 0.608] & 0.592 [0.576, 0.609] & 0.592 [0.576, 0.608] & 0.135 \\
+full & 0.496 [0.485, 0.507] & 0.495 [0.486, 0.505] & \textbf{0.495} [0.481, 0.509] & 0.008 \\
+\bottomrule
+\end{tabular}
+\end{table*}

@@ -25,7 +25,16 @@ Query flow (each step gated by Mitigations, see mitigations.py):
 
 Live authorization (live ACL check, lazy cache and memory checks) runs in-process here.
 iam_rpc_ms models it as a remote IAM service: one batched call per enforcement point
-per request, added to the simulated clock, counted in Truth.authz_calls.
+per request, added to the simulated clock, counted in Truth.authz_calls. Truth.authz_decisions
+counts the per-document checks inside those calls, which is what a real IAM has to evaluate.
+
+Exposed scores (confidence, reranker confidence) are computed over the chunks the user may
+see. Only expose_withheld_scores (strawman) computes them over every relevant candidate,
+including withheld ones; that is a specific API misconfiguration, not a property of
+check-after-retrieve.
+
+handle(write=False) answers without writing the cache or memory: the revocation experiment's
+read-only probes use it so that measuring a leak does not refresh it.
 taint_user_input fingerprints the query against restricted secrets so pasted content
 is tainted too (closes the gap of assumption A1, see docs/TAINT_SOUNDNESS.md).
 """
@@ -94,6 +103,8 @@ class Truth:
     live_denied_docs: list[str] = field(default_factory=list)     # caught by live_acl_check
     memory_turns: int = 0
     authz_calls: int = 0                                           # simulated IAM round trips
+    authz_decisions: int = 0                                       # per-document checks inside them
+    summaries_written: list[str] = field(default_factory=list)    # summary texts created by this request
     query_taint: list[str] = field(default_factory=list)          # taint_user_input fingerprint
     response_taint: list[str] = field(default_factory=list)
     llm_called: bool = False
@@ -121,6 +132,9 @@ class PipelineConfig:
     keep_recent: int = 4
     sync: str = "live"              # SyncPolicy spec, e.g. "periodic:3600", "event:0.05"
     iam_rpc_ms: float = 0.0         # simulated latency of one batched IAM check
+    memory_ttl_s: float = 0.0       # discard a chat session idle longer than this (0 = never)
+    hook_drop: float = 0.0          # probability an eager cache/memory revocation hook misses an event
+    summarizer: str = "extractive"  # "extractive" | "llm" (summarise with the generator model)
 
 
 class RAGPipeline:
@@ -134,6 +148,7 @@ class RAGPipeline:
         self.m = mitigations
         self.cfg = config
         self.rng = random.Random(seed)
+        self._hook_rng = random.Random(f"{seed}-hooks")   # once per run, so events draw in sequence
         self._qid = itertools.count(1)
         self._chunk_embeddings = chunk_embeddings
         # Restricted secrets -> docs, for taint_user_input. Short values ("12") would taint
@@ -155,17 +170,26 @@ class RAGPipeline:
         The vector index itself (Chroma collection) is reused across trials because
         re-ingesting it is the expensive part.
         """
-        self.acm = AccessControlManager.from_iam(self.corpus.iam, self.corpus.docs, self.clock)
+        self.acm = AccessControlManager.from_iam(self.corpus.iam, self.corpus.docs, self.clock,
+                                                 hook_drop=self.cfg.hook_drop, rng=self._hook_rng)
         policy = SyncPolicy.parse(self.cfg.sync)
         if self.index is None:
             self.index = VectorIndex(self.corpus.chunks, self._chunk_embeddings, self.acm, policy,
                                      self.clock, self.rng)
         else:
             self.index.rebind(self.acm)
+        m = self.m
         self.cache = SemanticCache(self.clock, self.acm, self.cfg.cache_ttl_s, self.cfg.cache_threshold,
-                                   self.m.cache_scope, self.m.cache_evict, self.m.cache_lazy_check)
+                                   m.cache_scope, m.cache_evict, m.cache_lazy_check,
+                                   epoch_check=m.epoch_invalidation, flush_on_revoke=m.flush_on_revoke)
+        if self.cfg.summarizer not in ("extractive", "llm"):
+            raise ValueError(f"summarizer must be extractive|llm, got {self.cfg.summarizer!r}")
         self.memory = SessionMemory(self.acm, self.cfg.summary_after, self.cfg.keep_recent,
-                                    self.m.taint_transitive, self.m.memory_purge, self.m.memory_lazy_check)
+                                    m.taint_transitive, m.memory_purge, m.memory_lazy_check,
+                                    clock=self.clock, ttl_s=self.cfg.memory_ttl_s,
+                                    epoch_check=m.epoch_invalidation, flush_on_revoke=m.flush_on_revoke,
+                                    summary_union=m.summary_taint_union, granularity=m.taint_granularity,
+                                    summarizer=self.llm.summarize if self.cfg.summarizer == "llm" else None)
         self._since_rev: dict[str, tuple[float, int]] = {}   # user -> (revocation time, queries since)
 
     def close(self) -> None:
@@ -174,7 +198,7 @@ class RAGPipeline:
 
     # ---- Request handling ---------------------------------------------------
 
-    def handle(self, user: str, session: str, query: str) -> tuple[ApiResponse, Truth]:
+    def handle(self, user: str, session: str, query: str, write: bool = True) -> tuple[ApiResponse, Truth]:
         t0 = self.clock.now()
         m = self.m
         tenant = self.acm.tenant_of(user)
@@ -193,9 +217,10 @@ class RAGPipeline:
                                 if self.corpus.doc(doc)["tenant_id"] == tenant)
             truth.query_taint = sorted(q_taint)
 
-        if m.cache_lazy_check:
+        if m.cache_lazy_check or m.epoch_invalidation:
             self._authz(truth)
         hit = self.cache.get(q_emb, user, tenant)
+        truth.authz_decisions += self.cache.last_decisions
         if hit is not None:
             entry, sim = hit
             truth.cache_hit, truth.cache_sim = True, sim
@@ -204,10 +229,14 @@ class RAGPipeline:
             text, taint = entry.response, entry.taint
             sources, conf, rr = list(entry.sources), entry.confidence, entry.rerank_confidence
         else:
-            text, taint, sources, conf, rr = self._generate(user, tenant, session, query, q_emb, truth, q_taint)
+            text, taint, sources, conf, rr = self._generate(user, tenant, session, query, q_emb, truth, q_taint,
+                                                            write)
 
-        self.memory.append(session, user, "user", query, q_taint)
-        self.memory.append(session, user, "assistant", text, taint)
+        if write:
+            for role, content, t in (("user", query, q_taint), ("assistant", text, taint)):
+                summary = self.memory.append(session, user, role, content, t)
+                if summary is not None:
+                    truth.summaries_written.append(summary)
 
         truth.response_taint = sorted(taint)
         truth.raw_confidence, truth.raw_rerank_confidence = conf, rr
@@ -229,9 +258,10 @@ class RAGPipeline:
         if self.cfg.iam_rpc_ms > 0:
             self.clock.sleep(self.cfg.iam_rpc_ms / 1000.0)
 
-    def _generate(self, user, tenant, session, query, q_emb, truth: Truth, q_taint=EMPTY):
+    def _generate(self, user, tenant, session, query, q_emb, truth: Truth, q_taint=EMPTY, write=True):
         m, cfg = self.m, self.cfg
-        cands = self.index.query(q_emb, cfg.top_k, user, tenant, prefilter=m.acl_prefilter)
+        cands = self.index.query(q_emb, cfg.top_k, user, tenant, prefilter=m.acl_prefilter,
+                                 cross_tenant=m.cross_tenant)
         relevant = [c for c in cands if c.score >= cfg.min_relevance]
         truth.candidate_docs = [c.doc_id for c in relevant]
         truth.candidate_scores = [round(c.score, 4) for c in relevant]
@@ -240,11 +270,13 @@ class RAGPipeline:
         if m.live_acl_check:
             if authorized:
                 self._authz(truth)
+                truth.authz_decisions += len({c.doc_id for c in authorized})
             truth.live_denied_docs = sorted({c.doc_id for c in authorized if not self.acm.has_access(user, c.doc_id)})
             authorized = [c for c in authorized if self.acm.has_access(user, c.doc_id)]
 
-        # The ranking stage sees post-filter candidates only when filtering happens inside retrieval.
-        ranked_set = authorized if m.acl_prefilter else relevant
+        # Exposed scores cover what the user may see, unless the deployment leaks the scores of
+        # withheld candidates (strawman). Ranking for generation uses the same set.
+        ranked_set = relevant if (m.expose_withheld_scores and not m.acl_prefilter) else authorized
         conf = max((c.score for c in ranked_set), default=0.0)
         rr_scores = self.reranker.score(query, [c.text for c in ranked_set])
         rr = max(rr_scores, default=0.0)
@@ -256,9 +288,10 @@ class RAGPipeline:
 
         reason = "" if gen else ("access_denied" if relevant else "not_found")
         refusal = refusal_text(reason or "not_found", m.uniform_refusal)
-        if m.memory_lazy_check:
+        if m.memory_lazy_check or m.epoch_invalidation:
             self._authz(truth)
         turns = self.memory.context(session, user)
+        truth.authz_decisions += self.memory.last_decisions
         truth.memory_turns = len(turns)
 
         if not gen and m.fast_refusal:
@@ -272,17 +305,22 @@ class RAGPipeline:
             )
             truth.llm_called, truth.llm_cached, truth.llm_latency_ms = True, g.cached, g.latency_s * 1000.0
             text = g.text
-            taint = response_taint((c.doc_id for c in gen), (t.taint for t in turns), m.taint_transitive) | q_taint
+            mem = turns
+            if m.taint_granularity == "sentence" and g.used_memory is not None:
+                # The generator reports exactly which memory items it used (the stub does), so
+                # the answer inherits only their taint. Real models report None: all of memory.
+                mem = [turns[i] for i in g.used_memory]
+            taint = response_taint((c.doc_id for c in gen), (t.taint for t in mem), m.taint_transitive) | q_taint
 
         refused = text.strip() == refusal.strip()
         truth.refused = refused
         truth.refusal_reason = reason if refused else ""
         sources = [(c.title, c.score) for c in gen] if not refused else []
-        if gen and not refused:
+        if gen and not refused and write:
             self.cache.put(CacheEntry(
                 embedding=q_emb, query=query, response=text, sources=sources, confidence=conf,
                 rerank_confidence=rr, taint=taint, source_docs=tuple(truth.gen_docs), tenant_id=tenant, created_by=user,
-                created_at=self.clock.now(),
+                created_at=self.clock.now(), epoch=self.acm.epoch(user),
             ))
         return text, taint, sources, conf, rr
 
@@ -297,10 +335,10 @@ class Client:
         self.exposure = exposure
         self.logger = logger
 
-    def ask(self, user: str, session: str, query: str, **tags) -> Observation:
+    def ask(self, user: str, session: str, query: str, write: bool = True, **tags) -> Observation:
         clock = self.pipeline.clock
         t0 = clock.now()
-        resp, truth = self.pipeline.handle(user, session, query)
+        resp, truth = self.pipeline.handle(user, session, query, write=write)
         latency_ms = (clock.now() - t0) * 1000.0
         truth.observed_latency_ms = latency_ms
         obs = Observation(text=resp.text, latency_ms=latency_ms)

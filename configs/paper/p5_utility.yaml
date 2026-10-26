@@ -1,0 +1,21 @@
+# RQ5 utility and cost with multi-turn sessions (memory and taint in play) and a simulated
+# remote IAM. Reports authorization decisions per query, not only calls (audit H9).
+name: p5_utility
+experiment: utility
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  sync: live
+  queries: 600
+  session_turns: 10
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  summarizer: llm
+grid:
+  preset: [baseline, epoch, flush, full, full_user, full_fine]
+  iam_rpc_ms: [0, 10]
+variants:
+  - {variant: padded}
+  - {variant: unpadded, latency_pad: false}

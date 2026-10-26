@@ -1,0 +1,73 @@
+\section{Evaluation Methodology}
+\label{sec:method}
+
+\subsection{Revocation experiment}
+Each revocation event proceeds as follows.
+\begin{enumerate}
+\item Sample a restricted target document and a victim who may read it.
+\item \emph{Warm-up.} In one chat session the victim asks about the target, then about four other documents (fillers), then about the target again. This leaves copies in the cache, in memory and in the summary.
+\item Wait a random 0--600\,s, then revoke (single-document, role, or offboarding).
+\item \emph{Probe} at scheduled times after revocation, from 0\,s to 48\,h. Each probe time asks three kinds of question: a same-session ``remind me what you told me earlier'' question (reaching memory, cache and index), a fresh-session question about the target (cache and index), and fresh-session questions about every other warmed-up document that the victim also lost.
+\end{enumerate}
+Event sampling is seeded by (seed, event index), so every configuration sees the same targets and victims and comparisons are paired on (seed, event).
+
+\paragraph{Leakage magnitude.}
+Let $S_e$ be the secrets of the target in event $e$ (its facts and its canary), and let a secret count as \emph{leaked} if its exact value appears in some post-revocation response and in no other source document that the response legitimately used. Then
+\begin{equation}
+\LM_e = \frac{|\{s\in S_e : s\ \text{leaked}\}|}{|S_e|},\qquad
+\LM = \frac{1}{N}\sum_{e=1}^{N}\LM_e .
+\end{equation}
+$\LM$ is also reported by the artifact that served the leaking response ($\LM_{\text{cache}},\LM_{\text{index}},\LM_{\text{memory}}$). These per-artifact values are not exclusive: one secret may leak through several artifacts, so they do not sum to $\LM$. The \emph{leak rate} is the fraction of events with $\LM_e>0$. The \emph{blast radius} $\LM_{\text{all lost}}$ applies the same definition to every warmed-up document the victim lost, not only the target. Because probes for the non-target documents are fresh-session questions, they do not reach chat memory.
+
+\paragraph{Leak lifetime.}
+For each event the lifetime is the first probe time after which leakage stops for good. Events still leaking at the 48\,h horizon are right-censored, so lifetimes are summarized with the Kaplan--Meier estimator~\cite{kaplan1958nonparametric}. Lifetimes are resolved only to the probe grid: a reported value is the first probe time at which the leak was gone. For a periodic crawl with period $\Delta$ and a revocation at a uniformly random phase, the remaining staleness is uniform on $[0,\Delta]$ with mean and median $\Delta/2$; we compare the measured index-leak lifetime with this value.
+
+\paragraph{Paired comparisons.}
+$\Delta\LM$ between two configurations is computed on identical (seed, event) pairs. Its 95\% interval is the percentile interval of 2000 bootstrap resamples of the pairs, and its two-sided $p$-value is twice the fraction of resamples on the smaller side of zero. With 2000 resamples the smallest value this procedure can resolve is about 0.001, so when no resample crosses zero we report $p<0.001$. Intervals for $\LM$ and the utility metrics use 2000 resamples; intervals for AUC and for Kaplan--Meier medians use 1000. Because events are nested in seeds, paired comparisons also report a two-stage cluster interval (resample seeds, then events within each seed) and a Wilcoxon signed-rank $p$-value, which is not limited by the bootstrap resolution; zero differences are dropped from the Wilcoxon test. Per-cell intervals resample events or probes pooled across seeds. We do not correct for multiple comparisons; the comparisons we interpret have $p$-values several orders of magnitude below 0.05.
+
+\subsection{Existence experiment (twin worlds)}
+For each restricted target the testbed builds two otherwise identical worlds: world~1 contains the document, world~0 does not. With probability 0.5 a legitimate user queries the target first, which warms the cache. The attacker then sends four probes in each world:
+\begin{itemize}
+\item the direct question about the target;
+\item a paraphrase (``give me an overview of \ldots'');
+\item a comparison with a public topic;
+\item a bare topic string, used only for its timing.
+\end{itemize}
+The label is the world. We train attackers on three shadow tenants and test on two held-out tenants, so no test target or tenant appears in training.
+
+\paragraph{Attackers.}
+The main attacker is a gradient-boosting classifier~\cite{friedman2001gradient} (150 trees, depth 3) trained separately per channel on the following features: \emph{score} (confidence, number of sources, top source score), \emph{reranker} (reranker confidence), \emph{latency} (latency and its logarithm, rounded to 1\,ms), \emph{refusal} (refusal and ``denied'' words, response length), \emph{content} (query--answer word overlap, digit count) and \emph{combined} (all of these). A logistic-regression variant and a rule-based threshold attacker are also run. Exposure profiles control what the attacker may see: text and latency only, plus sources and scores, or plus reranker confidence.
+
+\paragraph{Metrics.}
+We report AUC per probe (0.5 is chance), trial-level AUC (the four probe scores of a target averaged), true-positive rate at 1\% false-positive rate, and balanced accuracy, with bootstrap intervals. The low-FPR operating point follows the argument that average-case accuracy hides attacks that are confident on a few members~\cite{carlini2022mia}.
+
+\subsection{Robustness and cost experiments}
+\label{sec:method-review}
+The following experiments extend the main procedures. Each uses the same seeded events as the main runs, so its results are paired with them.
+
+\paragraph{Role revocation with restricted warm-up.}
+In the main revocation runs the four fillers are public or internal documents, so a role revocation removes only the target among the warmed-up documents. With restricted warm-up, the session also uses two further restricted documents that the victim may read, chosen from the target's project or group first, so that role revocation and offboarding remove more than the target and the blast radius distinguishes them.
+
+\paragraph{Collateral cost.}
+After revocation, the victim is also asked about every warmed-up document that they may still read, once in the original session and once in a fresh session. Correctness and refusals on these probes measure what over-tainting costs: a summary purged because one of its sources was revoked also loses content from documents the user still holds. The comparison covers \texttt{baseline}, \texttt{legacy}, \texttt{full}, and \texttt{full} without transitive taint, for single-document and role revocation.
+
+\paragraph{Taint stress (paste-back laundering).}
+To test assumption A1, at revocation time the victim pastes the answer they received during the warm-up into a fresh session, asks for it to be rewritten as an e-mail, and then asks the target question again. At every probe time a colleague in the same tenant without access to the target asks the target question. We measure whether the laundering succeeds for the victim and whether the colleague receives the target's secrets, with query fingerprinting off and on, using real generators.
+
+\paragraph{Literature baselines.}
+Two further presets model published designs on the same switches. \texttt{authz\_postfilter} retrieves across the tenant and then checks every chunk against live, consistent authorization, in the style of Zanzibar-based ``check after retrieve''~\cite{pang2019zanzibar}. \texttt{authz\_prefilter} trims retrieval at query time against live IAM, in the style of permission-aware RAG~\cite{jeong2025permissionrag}. Neither hooks the cache or the memory. HoneyBee maintains materialized role partitions and updates them incrementally when permissions change, but does not analyze the interval between a permission change and the partition update, nor any artifact outside the index~\cite{zhong2026honeybee}. Designs that filter on a materialized ACL copy without such an update path (vector-store metadata filters or per-user indexes refreshed on a schedule) behave like \texttt{baseline}. Both new presets are run through the revocation experiment (single-document and offboarding) and the existence experiment.
+
+\paragraph{Authorization overhead.}
+In the main runs the live and lazy checks are in-process lookups. To estimate their cost against a remote identity service, the utility experiment is repeated with one simulated IAM round trip of 0, 2 or 10\,ms per enforcement point per request, for \texttt{baseline}, \texttt{full}, and \texttt{full} without latency padding. We report latency and the number of authorization calls per query.
+
+\paragraph{Larger and hosted generators.}
+The revocation and existence experiments are repeated with Qwen2.5-7B-Instruct served locally with Ollama, and the revocation experiment with a hosted model (\texttt{gpt-oss-120b} through Groq), at temperature 0.
+
+\paragraph{Paraphrase judge.}
+For responses from the real-model runs, an LLM judge is asked about every fact that the exact-match judge did not find. We report how much leakage the paraphrase judge adds. Two authors label 150 judged items by hand to estimate the judge's precision.
+
+\paragraph{Real-text track.}
+A second corpus is built from Enron e-mail~\cite{klimt2004enron}, using the questions and answers of the EnronQA benchmark~\cite{ryan2025enronqa}.\footnote{Dataset at \url{https://huggingface.co/datasets/MichaelR207/enron_qa_0922}.} Ten inboxes form five tenants of two inboxes each; each inbox owner has an assistant. An e-mail addressed to few people is restricted to its inbox group, and mass mail is internal to the tenant. Facts are short spans from the gold answers (numbers, amounts, quoted strings, proper names) that appear verbatim in the e-mail and not in the question; e-mails without such a span are dropped, and there are no canaries. E-mails in the same thread form a project. The text, questions and answers are real; the tenancy and the ACLs are ours. The revocation experiment (\texttt{baseline} and \texttt{full}; single-document and role revocation) and the existence experiment are repeated on this corpus.
+
+\subsection{Utility experiment}
+Authorized users ask answerable questions about each of 300 documents, twice, the second time reworded so that the cache is exercised. We report Recall@5 and nDCG@5 of the source document, answer correctness (the expected answer appears in the response), over-refusal (refusals of answerable, authorized questions), p50 and p95 latency, and the cache hit rate.

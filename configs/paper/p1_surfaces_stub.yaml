@@ -1,0 +1,21 @@
+# RQ1 with the stub generator (validation harness, cheap): same events as p1_surfaces.
+name: p1_surfaces_stub
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  preset: full
+  sync: periodic:86400
+  events: 40
+  warm_restricted: 2
+  probe_readonly: true
+  probe_unseen: true
+  probe_paraphrase: file
+  probe_times: [0, 600, 3600, 14400, 43200, 86400, 172800]
+  llm_backend: stub
+  stub_sentences: 1
+grid:
+  open_surface: [none, index, cache, memory]
+  revocation_type: [single_doc, role, mover, user_offboard]

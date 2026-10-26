@@ -1,0 +1,21 @@
+\section{Ethics}
+\label{sec:ethics}
+
+\paragraph{Data.}
+We use the public Enron e-mail corpus~\cite{klimt2004enron}, released during the Federal Energy
+Regulatory Commission investigation and widely used in research, and the public EnronQA
+benchmark~\cite{ryan2025enronqa} built on it. We do not collect new personal data and add nothing that
+identifies anyone beyond what the public corpus contains. The canary sentences injected into
+restricted e-mails are random codes that we generated; they contain no real information.
+
+\paragraph{Human subjects.}
+The study involves no human subjects. The only people who read or label model responses are the
+authors.
+
+\paragraph{Real-stack demonstration.}
+The demonstration in \cref{sec:res-realstack} uses documented, configurable behaviour of open-source
+libraries (LangChain, Chroma, RedisVL) in a local test deployment on the authors' machine. It touches
+no third-party systems, accounts or data, and it exploits no bug: the leaks follow from how the
+application combines the components. We did not notify the maintainers, because the behaviour is
+documented and configurable: the libraries leave cache scoping, cache invalidation and memory
+retention to the application, and the defenses we evaluate are changes an application can make.

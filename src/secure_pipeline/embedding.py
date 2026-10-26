@@ -11,6 +11,7 @@ a hash of the chunk texts, so repeated runs do not re-encode 500+ chunks.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from pathlib import Path
 
@@ -68,5 +69,7 @@ def encode_cached(embedder, texts: list[str]) -> np.ndarray:
         return np.load(path)
     vecs = embedder.encode(texts)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    np.save(path, vecs)
+    tmp = path.with_suffix(f".{os.getpid()}.tmp.npy")  # atomic: parallel workers share the cache
+    np.save(tmp, vecs)
+    os.replace(tmp, path)
     return vecs

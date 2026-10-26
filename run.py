@@ -23,9 +23,13 @@ Config format:
       - {variant: fast_refusal, fast_refusal: true}
 
 Cell keys can be: any Mitigations field, any PipelineConfig field, preset, open_surface,
-ablate, embedder, reranker, llm_backend, llm_model, clock, exposure, and experiment
-parameters (events, revocation_type, probe_times, warm_fillers, tenants,
-targets_per_tenant, attackers, victim_warmup, queries).
+ablate, embedder, reranker, llm_backend, llm_model, llm_cache, stub_sentences, clock, exposure,
+corpus, and experiment parameters (events, revocation_type, probe_times, warm_fillers, tenants,
+targets_per_tenant, attackers, victim_warmup, queries, session_turns, revoke_gap_s,
+probe_readonly, probe_unseen, update_after_revoke, probe_paraphrase).
+
+corpus: synthetic_v3@seed gives every seed its own generated corpus (synthetic_v3_s<seed>),
+so seeds are independent replicates rather than re-draws of events from one corpus.
 
 Output: <out>/<name>/manifest.json and <out>/<name>/runs/<cell_id>_s<seed>.jsonl.
 Finished runs are skipped on re-invocation unless --force is given.
@@ -37,6 +41,7 @@ import argparse
 import hashlib
 import itertools
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -79,6 +84,96 @@ def _slug(s: str) -> str:
     return "".join(ch if ch.isalnum() or ch in "=,._-" else "_" for ch in s)[:80]
 
 
+# ---- Jobs ------------------------------------------------------------------------------
+# One job = one (cell, seed): its own RNGs (seeded by seed and event), pipeline and output file, so
+# jobs can run in any order or in parallel. Workers share only the on-disk caches.
+_ENVS: dict[tuple, object] = {}
+_KEEP_ENVS = True  # parallel workers keep only the current Env (memory)
+
+
+def _run_job(cell: dict, seed: int, path: Path) -> float:
+    from src.secure_pipeline.corpus import seeded_corpus
+    from src.secure_pipeline.experiments import Env, run_cell
+    from src.secure_pipeline.instrumentation import RunLogger
+
+    key = (cell.get("embedder", "all-MiniLM-L6-v2"),
+           cell.get("reranker", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+           int(cell.get("chunk_tokens", 300)), seeded_corpus(cell.get("corpus", "synthetic"), seed))
+    if key not in _ENVS:
+        if not _KEEP_ENVS:
+            _ENVS.clear()
+        print(f"[run] loading embedder={key[0]} reranker={key[1]} corpus={key[3]}", flush=True)
+        _ENVS[key] = Env.build(*key)
+    tmp = path.with_suffix(".partial")
+    tmp.unlink(missing_ok=True)
+    t0 = time.time()
+    logger = RunLogger(tmp)
+    try:
+        run_cell(_ENVS[key], cell, seed, logger)
+    finally:
+        logger.close()
+    tmp.rename(path)
+    return time.time() - t0
+
+
+def _init_worker(urls, threads: int) -> None:
+    global _KEEP_ENVS
+    _KEEP_ENVS = False
+    url = urls.get()
+    if url:
+        os.environ["OLLAMA_BASE_URL"] = url
+    import torch
+    torch.set_num_threads(threads)
+
+
+def _run_parallel(todo: list[tuple], workers: int) -> None:
+    """Run jobs in worker processes, spread over the servers in OLLAMA_BASE_URLS (comma-separated).
+
+    Existence cells and cells with llm_cache: false measure each call's latency (timing channels).
+    For them every server gets exactly one worker, so it serves one request at a time, as in a
+    sequential run (stub cells run in this process: their latency includes CPU time).
+    Other cells send concurrent requests, which vLLM batches; texts at temperature 0 can then differ
+    in rare tokens from a sequential run (vLLM is not batch-invariant), and their slower calls
+    shift virtual timestamps by seconds, against probe times of minutes to hours."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    urls = [u for u in os.getenv("OLLAMA_BASE_URLS", os.getenv("OLLAMA_BASE_URL", "")).split(",") if u]
+    timed = [c for c, _, _ in todo if c["experiment"] == "existence" or not c.get("llm_cache", True)]
+    if timed:
+        # Timing channels: every call must run uncontended. Real models get one worker per server;
+        # the stub's latency includes CPU time, so it runs alone.
+        real = any(c.get("llm_backend", "stub") != "stub" for c in timed)
+        cap = max(1, len(urls)) if real else 1
+        if workers > cap:
+            workers = cap
+            print(f"[run] latency is measured in this grid: {workers} worker(s), one per server", flush=True)
+        if workers == 1:
+            for i, (cell, seed, path) in enumerate(todo, 1):
+                secs = _run_job(cell, seed, path)
+                print(f"[run] {i}/{len(todo)} {cell['label']} seed={seed} ({secs:.1f}s) -> {path.name}", flush=True)
+            return
+    workers = min(workers, len(todo)) or 1
+    ctx = mp.get_context("spawn")
+    queue = ctx.Queue()
+    for i in range(workers):
+        queue.put(urls[i % len(urls)] if urls else "")
+    threads = max(1, (os.cpu_count() or 1) // workers)
+    print(f"[run] {len(todo)} jobs on {workers} workers ({threads} CPU threads each, "
+          f"{len(urls) or 1} server(s))", flush=True)
+    with ProcessPoolExecutor(workers, mp_context=ctx, initializer=_init_worker,
+                             initargs=(queue, threads)) as pool:
+        futures = {pool.submit(_run_job, *job): job for job in todo}
+        for i, fut in enumerate(as_completed(futures), 1):
+            cell, seed, path = futures[fut]
+            try:
+                secs = fut.result()
+            except BaseException:
+                pool.shutdown(cancel_futures=True)
+                raise
+            print(f"[run] {i}/{len(todo)} {cell['label']} seed={seed} ({secs:.1f}s) -> {path.name}", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", type=Path, required=True)
@@ -86,6 +181,10 @@ def main() -> None:
     ap.add_argument("--seed-offset", type=int, default=0)
     ap.add_argument("--out", type=Path, default=ROOT / "results")
     ap.add_argument("--force", action="store_true", help="rerun cells that already have output")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="parallel (cell, seed) jobs; see _run_parallel for latency-measuring cells")
+    ap.add_argument("--only", action="append", default=[], metavar="KEY=VALUE",
+                    help="run only cells with this field value (repeatable); the manifest keeps every cell")
     args = ap.parse_args()
     configure_utf8_stdio()
 
@@ -99,36 +198,24 @@ def main() -> None:
                 "seeds": seeds, "cells": cells}
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
 
-    from src.secure_pipeline.experiments import Env, run_cell
-    from src.secure_pipeline.instrumentation import RunLogger
+    for kv in args.only:
+        k, v = kv.split("=", 1)
+        cells = [c for c in cells if str(c.get(k)) == v]
+    jobs = [(cell, seed, out_dir / "runs" / f"{cell['cell_id']}_s{seed}.jsonl") for cell in cells for seed in seeds]
+    total = len(jobs)
+    todo = []
+    for i, (cell, seed, path) in enumerate(jobs, 1):
+        if path.exists() and not args.force:
+            print(f"[run] {i}/{total} skip {path.name} (exists)")
+        else:
+            todo.append((cell, seed, path))
 
-    envs: dict[tuple, Env] = {}
-    total = len(cells) * len(seeds)
-    done = 0
-    for cell in cells:
-        key = (cell.get("embedder", "all-MiniLM-L6-v2"),
-               cell.get("reranker", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
-               int(cell.get("chunk_tokens", 300)), cell.get("corpus", "synthetic"))
-        if key not in envs:
-            print(f"[run] loading embedder={key[0]} reranker={key[1]}", flush=True)
-            envs[key] = Env.build(*key)
-        for seed in seeds:
-            done += 1
-            path = out_dir / "runs" / f"{cell['cell_id']}_s{seed}.jsonl"
-            if path.exists() and not args.force:
-                print(f"[run] {done}/{total} skip {path.name} (exists)")
-                continue
-            tmp = path.with_suffix(".partial")
-            tmp.unlink(missing_ok=True)
-            t0 = time.time()
-            logger = RunLogger(tmp)
-            try:
-                run_cell(envs[key], cell, seed, logger)
-            finally:
-                logger.close()
-            tmp.rename(path)
-            print(f"[run] {done}/{total} {cell['label']} seed={seed} ({time.time() - t0:.1f}s) -> {path.name}",
-                  flush=True)
+    if args.workers <= 1:
+        for i, (cell, seed, path) in enumerate(todo, 1):
+            secs = _run_job(cell, seed, path)
+            print(f"[run] {i}/{len(todo)} {cell['label']} seed={seed} ({secs:.1f}s) -> {path.name}", flush=True)
+    else:
+        _run_parallel(todo, args.workers)
     print(f"[run] done. Analyze with: python analyze.py {out_dir}")
 
 

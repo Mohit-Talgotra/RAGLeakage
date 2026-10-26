@@ -16,12 +16,20 @@ Mapping (the tenancy is ours; the text, questions and answers are real):
   Emails without such a span are dropped. There are no canaries.
 - Emails in the same thread (same normalized subject in an inbox) share a project, which gives
   twin-world existence inference hard negatives, as in the synthetic corpus.
+- --canaries appends a unique canary sentence to every restricted email (Carlini et al.'s
+  secret-sharer method applied to real text), so the real-text track has a zero-ambiguity
+  leak signal as well (audit H3). The judge scores only corpus-unique fact values, so spans that
+  recur across a thread do not count.
+- --inboxes scales the corpus (must be even; two inboxes per tenant).
 
-    python scripts/build_enron_corpus.py            # deterministic, seed 20261008
+    python scripts/build_enron_corpus.py                              # data/enron, seed 20261008
+    python scripts/build_enron_corpus.py --canaries --out data/enron_c  # the corpus the paper uses
+    python scripts/build_enron_corpus.py --canaries --inboxes 20 --out data/enron_c20
 """
 
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import random
@@ -67,6 +75,13 @@ def thread_key(subject: str) -> str:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", type=Path, default=OUT)
+    ap.add_argument("--canaries", action="store_true")
+    ap.add_argument("--inboxes", type=int, default=N_INBOXES)
+    args = ap.parse_args()
+    if args.inboxes % 2:
+        raise SystemExit("--inboxes must be even (two inboxes per tenant)")
     import pandas as pd
     files = sorted(glob.glob(str(ROOT / ".cache/hf/datasets--MichaelR207--enron_qa_0922/snapshots/*/data/*.parquet")))
     if len(files) < 4:
@@ -93,12 +108,14 @@ def main() -> None:
     eligible = sorted(u for u, es in by_user.items()
                       if sum(not e["mass"] for e in es) >= RESTRICTED_PER_INBOX
                       and sum(e["mass"] for e in es) >= INTERNAL_PER_INBOX)
-    inboxes = sorted(rng.sample(eligible, N_INBOXES))
+    inboxes = sorted(rng.sample(eligible, args.inboxes))
+    canary_rng = random.Random(SEED + 1)
+    canaries: set[str] = set()
     print(f"[enron] {len(eligible)} eligible inboxes, using {inboxes}")
 
     docs, users, groups = [], [], {}
     tenants = []
-    for t_i in range(N_INBOXES // 2):
+    for t_i in range(args.inboxes // 2):
         tid = f"e{t_i + 1}"
         pair = inboxes[2 * t_i: 2 * t_i + 2]
         tenants.append({"tenant_id": tid, "name": f"Enron desk {t_i + 1}", "industry": "energy", "hq": "Houston, TX"})
@@ -119,12 +136,19 @@ def main() -> None:
                     shared = kind == "restricted" and len(threads[thread_key(e["subject"])]) > 1
                     body = "\n".join(l for l in e["email"].splitlines() if not l.startswith("File: "))
                     topic = thread_key(e["subject"])[:60] or "(no subject)"
+                    canary = None
+                    if args.canaries and kind == "restricted":
+                        while canary is None or canary in canaries:
+                            canary = (f"codename {''.join(canary_rng.choice('ABCDEFGHJKLMNPQRSTUVWXYZ') for _ in range(2))}"
+                                      f"-{canary_rng.randint(1000, 9999)}")
+                        canaries.add(canary)
+                        body = f"{body}\n\nInternal reference: {canary}."
                     docs.append({
                         "doc_id": doc_id, "tenant_id": tid, "title": f"{e['subject'][:80]} -- email",
                         "sensitivity": kind,
                         "acl_groups": [f"{tid}_{name}_inbox"] if kind == "restricted" else [f"{tid}_all"],
                         "topic": topic, "project": f"{tid}_{name}:{topic}" if shared else None,
-                        "facts": e["facts"], "canary": None, "qa": e["qa"], "text": body,
+                        "facts": e["facts"], "canary": canary, "qa": e["qa"], "text": body,
                     })
         colleagues = [f"{tid}_colleague{i}" for i in (1, 2)]
         contractors = [f"{tid}_contractor{i}" for i in (1, 2)]
@@ -134,14 +158,15 @@ def main() -> None:
             users.append({"user_id": u, "tenant_id": tid, "role": "contractor" if u in contractors else "employee",
                           "groups": sorted(g for g, ms in groups.items() if u in ms)})
 
-    OUT.mkdir(parents=True, exist_ok=True)
-    with (OUT / "corpus.jsonl").open("w", encoding="utf-8") as fh:
+    out = args.out
+    out.mkdir(parents=True, exist_ok=True)
+    with (out / "corpus.jsonl").open("w", encoding="utf-8") as fh:
         for d in docs:
             fh.write(json.dumps(d, ensure_ascii=False) + "\n")
-    (OUT / "iam.json").write_text(json.dumps({"tenants": tenants, "users": users, "groups": groups}, indent=2),
+    (out / "iam.json").write_text(json.dumps({"tenants": tenants, "users": users, "groups": groups}, indent=2),
                                   encoding="utf-8")
     n_r = sum(d["sensitivity"] == "restricted" for d in docs)
-    print(f"[enron] wrote {len(docs)} docs ({n_r} restricted), {len(users)} users -> {OUT}")
+    print(f"[enron] wrote {len(docs)} docs ({n_r} restricted), {len(users)} users -> {out}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,148 @@
+\section{Read-Time Defenses for Derived State}
+\label{sec:defense}
+
+All defenses below share the same retrieval and response-shape settings: a live IAM check on every
+retrieved chunk, ACL filtering inside the vector query, and constant-shape responses. They differ in
+how they decide whether a cache entry or a memory item may still be served.
+
+\subsection{Provenance-tainted revocation}
+\paragraph{Taint.}
+Every derived artifact $a$ carries a taint $T(a)\subseteq\mathcal{D}$, the set of source documents
+whose content it may contain. A cache entry has the taint of the answer it stores. An answer has the
+union of the taints of the chunks and memory items in its prompt; a summary has the union of the
+taints of the turns it replaces:
+\begin{equation}
+T(\mathrm{answer}) = \bigcup_{c\in\mathrm{context}} T(c), \qquad
+T(\mathrm{summary}) = \bigcup_{t\in\mathrm{turns}} T(t).
+\end{equation}
+The first equation makes taint transitive through memory: an answer built from an earlier answer
+about document $d$ inherits $d$.
+
+\paragraph{Enforcement.}
+\emph{Eagerly}, when a revocation event fires, tainted cache entries are evicted and tainted memory
+items are purged. \emph{Lazily}, on every read, artifact $a$ is served to user $u$ at time $t$ only if
+\begin{equation}
+\forall d\in T(a):\; \mathrm{IAM}(u,d,t)=\text{allow}.
+\label{eq:lazy}
+\end{equation}
+The lazy check refers to the identity system at read time, so it does not depend on whether a
+revocation event reached the artifact. The cache evaluates it only for candidates above the
+similarity threshold, from the most similar down, so authorization work grows with the number of
+servable candidates rather than with the cache size.
+
+\paragraph{Sentence-level taint.}
+A summary's taint is the union of everything it condenses, so one revoked source discards the whole
+summary, including material from documents the user still holds. With an extractive summarizer, each
+summary sentence can carry the taint of the turn it came from, and the lazy check then drops only the
+tainted sentences (\texttt{full\_fine}). This stays sound with any generator, since a filtered
+summary's taint is the union of the sentences it keeps. Two things limit it. With model-written
+summaries there is no sentence-to-source mapping, so \texttt{full\_fine} reduces to \texttt{full};
+this paper does not measure it. And an answer's taint covers every
+memory item in its prompt unless the generator reports which items it used: our stub does, real
+models do not, so with real models an answer given after the user discussed the revoked document
+carries that document's taint even if it did not use it. Context
+attribution~\cite{cohenwang2024contextcite} or permissive information-flow
+analysis~\cite{siddiqui2024permissive} is the route to finer answer taint, at the price of a
+soundness argument we do not make.
+
+\subsection{Simple alternatives}
+A reviewer's first question is why taint is needed at all. We implement the two obvious
+alternatives with identical retrieval and response settings.
+\begin{itemize}
+\item \emph{Permission epoch} (\texttt{epoch}). Each user has an epoch in the IAM that every
+revocation increments; a reclassification increments the epoch of every user who loses the
+document. Cache entries and memory turns carry the epoch of the user who created them
+and are dropped on read when it is stale; a summary written after a revocation does not absorb stale
+turns. This is a read-time check, so it covers lost events, but it discards everything the user
+derived before any revocation, whatever its sources.
+\item \emph{Session flush} (\texttt{flush}). On a revocation event, every session and cache entry of
+that user is dropped. It is eager and depends on event delivery: a revocation hook that is never
+delivered, as happens with webhooks or a message bus, leaves the user's state in place.
+\end{itemize}
+The read-time alternatives reach zero leakage by construction for the artifacts they cover. The
+comparison that matters is therefore what each one costs (\cref{sec:rq5}). The cost differs most
+when a document is reclassified: the epoch of every user who loses it is bumped and all their
+sessions are discarded, whereas taint discards only what derives from that document. The existence
+experiment also runs \texttt{full} with a per-user cache (\texttt{full\_user}), so that the comparison
+does not mix the defense with cache scope.
+
+\subsection{Constant-shape responses}
+Responses expose relevance scores only in coarse bands and only over chunks the user may see, use one
+refusal text for every reason, and pad latency up to the next multiple of a bucket (500\,ms). Padding
+is applied after all computation.
+
+\subsection{Security argument and assumptions}
+\label{sec:soundness}
+\begin{invariant}
+For every derived artifact $a$ (cache entry, memory turn, summary or summary sentence), if content
+of a restricted document $d$ reached $a$ through retrieval or memory, then $d\in T(a)$.
+\end{invariant}
+
+\begin{proposition}
+Assume A1--A4 below. If the invariant holds and every read of a derived artifact applies
+\eqref{eq:lazy}, then after $u$ loses access to $d$ no response to $u$ is generated from, or
+re-serves, an artifact containing content of $d$, and no retrieval for $u$ returns a chunk of $d$.
+\end{proposition}
+\begin{proof}[Proof sketch]
+Content enters an artifact only through a generation step, whose inputs are the retrieved chunks,
+the memory items in the prompt and the query. The pipeline writes the union of the chunks' documents
+and the items' taints as the response taint, cache and memory writes store it unchanged, a cache hit
+re-serves an entry with its stored taint, and a summary's taint (or each summary sentence's) is the
+union of the taints it condenses. By induction over the sequence of writes, the invariant holds for
+every artifact. After revocation $\mathrm{IAM}(u,d,t)=\text{deny}$ for every read (A4), so any
+artifact with $d\in T(a)$ fails \eqref{eq:lazy}, and the live check removes $d$'s chunks from
+retrieval. The response is then generated only from artifacts and chunks free of $d$'s content (A1--A3).
+\end{proof}
+
+A randomized test runs sessions with frequent summarization, at turn and sentence granularity, and
+checks that no artifact holds a secret unique to a restricted document without that document in its
+taint; it also confirms that dropping transitivity violates the invariant.
+
+\paragraph{Assumptions.}
+\begin{itemize}
+\item[A1] \emph{User input is untainted.} Pasted restricted content is not attributed to its source.
+An optional switch fingerprints queries against restricted secrets and taints a query containing one
+verbatim; paraphrased re-entry is the declassification limit of information-flow
+control~\cite{myers1997decentralized,sabelfeld2003language}. Measuring this channel is future work
+(\cref{sec:conclusion}).
+\item[A2] \emph{No untracked inputs.} Tools, web search or plug-ins would have to label their output.
+\item[A3] \emph{Document ACLs are correct.} A document that copies restricted figures under a broader
+ACL legitimately serves them.
+\item[A4] \emph{Consistent authorization reads.} Checks read IAM state at least as new as the
+revocation; a lagging replica reopens the ``new enemy'' window~\cite{pang2019zanzibar}.
+\end{itemize}
+
+\paragraph{Presets.}
+\Cref{tab:presets} defines the deployments. \texttt{strawman} is a deliberately leaky reference.
+\texttt{baseline} follows the documented defaults of \cref{tab:grounding}. \texttt{baseline\_shared}
+is the same with a tenant-shared cache, a misconfiguration we measure separately. \texttt{legacy} purges
+memory by document identifier, which cannot match a summary. \texttt{authz\_prefilter} and
+\texttt{authz\_postfilter} implement the enforcement patterns of permission-aware
+RAG~\cite{jeong2025permissionrag} and Zanzibar-style check-after-retrieve~\cite{pang2019zanzibar} on our
+switches; they are reimplementations of the pattern, not those systems.
+
+\begin{table*}[t]
+\centering
+\caption{Deployment presets. ``Stale ACL'' means the index ACL copy is trusted between syncs. All
+presets except \texttt{strawman} retrieve within the user's tenant and expose scores computed over
+chunks the user may see.}
+\label{tab:presets}
+\footnotesize
+\begin{tabular}{@{}p{2.2cm}p{3.1cm}p{3.6cm}p{3.6cm}p{3.6cm}@{}}
+\toprule
+Preset & Retrieval & Cache & Memory & Response metadata \\
+\midrule
+strawman & all tenants, post-filter, withheld scores exposed & global, no hook & no purge & raw scores, distinct refusals \\
+baseline & pre-filter, stale ACL & per user, no hook & no purge & raw \\
+baseline\_shared & pre-filter, stale ACL & tenant-shared, no check & no purge & raw \\
+legacy & pre-filter, stale ACL & tenant, evict on revoke & purge by document ID & bands, uniform refusal, 30\,ms floor, fast refusal \\
+authz\_prefilter & pre-filter, live IAM & per user, no hook & no purge & raw \\
+authz\_postfilter & post-filter, live IAM & per user, no hook & no purge & raw \\
+epoch & pre-filter, live IAM & per user, epoch check & epoch check & bands, uniform refusal, 500\,ms buckets \\
+flush & pre-filter, live IAM & per user, flush on revoke & flush on revoke & as epoch \\
+full & pre-filter, live IAM & tenant, evict + lazy taint check & transitive taint purge + lazy check & as epoch \\
+full\_user & as full & per user, evict + lazy taint check & as full & as epoch \\
+full\_fine & as full & as full & as full, sentence-level summary taint & as epoch \\
+\bottomrule
+\end{tabular}
+\end{table*}

@@ -1,0 +1,18 @@
+\begin{table}[tbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{Existence inference with a real LLM (Qwen2.5-3B; 3 seeds, 768 test probes per cell),
+combined attacker with reranker, and the latency channel alone.}
+\label{tab:realllm-eia}
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{Combined AUC} & \multicolumn{2}{c}{Latency-channel AUC} \\
+Preset & Stub & Qwen2.5-3B & Stub & Qwen2.5-3B \\
+\midrule
+strawman & 0.983 & 0.973 [0.959, 0.984] & 0.555 & 0.659 \\
+baseline & 0.612 & 0.605 [0.563, 0.645] & 0.513 & 0.596 \\
+full & 0.495 & 0.513 [0.474, 0.552] & 0.499 & 0.507 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,164 @@
+\section{Results}
+\label{sec:results}
+
+Unless stated otherwise, results are for Llama-3.1-8B (4-bit, served locally) with model-written
+summaries on Enron, 100 revocation events per cell (\texttt{p\_min\_enron}); brackets are 95\%
+intervals clustered by target document. Stub results are labelled as such and never pooled with
+model results. Every red value is filled from the configuration named in \cref{tab:grid} (see
+\texttt{RESULTS\_TODO.md}).
+
+\subsection{RQ1: Which artifacts leak, and is it new to the user?}
+\label{sec:rq1}
+
+\begin{table*}[t]
+\centering
+\caption{Post-revocation leakage per preset (single-document revocation, daily crawl, 100 events per
+cell). $\LM^{\text{new}}$: secrets the victim was never shown; $\LM^{\text{re}}$: re-disclosure;
+$\LM_{\ge 1\text{h}}$: from probes at least one hour after revocation. Per-artifact columns are
+attributed from ground truth and are not exclusive.}
+\label{tab:rq1}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+Preset & $\LM$ & $\LM^{\text{new}}$ & $\LM^{\text{re}}$ & $\LM_{\ge 1\text{h}}$ & $\LM_{\text{index}}$ & $\LM_{\text{cache}}$ & $\LM_{\text{memory}}$ \\
+\midrule
+baseline & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+authz\_prefilter & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+epoch & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+full & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Observation.}
+The per-user cache and the question-and-answer memory hold only what the victim was shown, so their
+$\LM^{\text{new}}$ is zero by construction; agent memory that keeps tool outputs is an exception
+(\cref{sec:res-realstack}). \pending{R1: LM and LM\_new under baseline and which artifact carries
+them; share of leakage that is re-disclosure; canary-only leak rate as a judge-free check; share of
+secrets that survive into model-written summaries.}
+
+\paragraph{Interpretation.}
+\pending{Whether each artifact leaks on its own once re-disclosure is separated out. Pilot runs
+(\cref{app:pilot}) found re-disclosure to be most of the stub's leakage (0.527 of 0.585) but under half
+of Qwen2.5-3B's (0.336 of 0.694): real models answer ``remind me'' questions with facts the user never
+asked about.}
+
+\subsection{RQ2: How long does leakage last?}
+\label{sec:rq2}
+\pending{R2: per-artifact lifetimes over the probes at 0\,s, 1\,h and 24\,h (Kaplan--Meier, share
+censored at 24\,h) from p\_min\_enron, and over 0\,s--48\,h from p\_min\_defenses\_stub for the index
+under a daily crawl (validated against $\Delta/2$ in \cref{app:validation}) and the cache under a
+3600\,s TTL.}
+
+\subsection{RQ3: What can an API client infer about hidden documents?}
+\label{sec:rq3}
+
+\begin{table*}[t]
+\centering
+\caption{Existence inference with the stub generator on Enron (combined attacker, with-reranker
+profile, held-out tenants e4--e5), insiders and outsiders separately. Cells marked
+\textsuperscript{s} are structural: the pre-filter hides the target in both worlds, so only shared
+state can differ.}
+\label{tab:rq3}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Preset & Insider AUC & Outsider AUC & Insider TPR@1\%FPR & Strongest channel \\
+\midrule
+strawman & \pending{} & \pending{} & \pending{} & \pending{} \\
+baseline & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+baseline\_shared & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+legacy & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+epoch & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+full & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+full\_user & \pending{} & \pending{}\textsuperscript{s} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Observation.}
+\pending{R3: AUC per preset, insider vs outsider, per channel; sibling vs singleton targets (most Enron
+targets are singletons).} In the pilot runs the old baseline, whose cache was shared across the
+tenant, reached AUC 0.714 [0.664, 0.765] for insiders and 0.512 [0.490, 0.532] for outsiders: almost
+all of its signal was restricted answers served to insiders from the shared cache (\cref{app:pilot}).
+That is an authorization failure rather than a side channel, which is why \texttt{baseline} now scopes
+the cache per user and the shared cache is measured as its own preset. The stub's latency is
+simulated, so this paper makes no claim about timing channels of served models.
+
+\subsection{RQ4: What closes each channel?}
+\label{sec:rq4}
+
+\begin{table*}[t]
+\centering
+\caption{Defenses compared on the same paired events (single-document revocation, daily crawl).
+Top: model run (100 events per cell). Bottom: stub (200 events per cell, extractive summaries,
+one-sentence answers) with insider existence AUC from the stub existence run. Retained recall and
+refusals: answers about documents the victim still holds, in the session where the revocation
+happened.}
+\label{tab:defenses}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llcccccc@{}}
+\toprule
+Run & Preset & $\LM$ & $\LM^{\text{new}}$ & Retained recall & Refusals & Insider AUC & Decisions/query \\
+\midrule
+L8 & baseline & \pending{} & \pending{} & \pending{} & \pending{} & -- & 0 \\
+L8 & authz\_prefilter & \pending{} & \pending{} & \pending{} & \pending{} & -- & \pending{} \\
+L8 & epoch & \pending{} & \pending{} & \pending{} & \pending{} & -- & \pending{} \\
+L8 & full & \pending{} & \pending{} & \pending{} & \pending{} & -- & \pending{} \\
+\midrule
+stub & baseline & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & 0 \\
+stub & baseline\_shared & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & 0 \\
+stub & authz\_prefilter & \pending{} & \pending{} & \pending{} & \pending{} & -- & \pending{} \\
+stub & authz\_postfilter & \pending{} & \pending{} & \pending{} & \pending{} & -- & \pending{} \\
+stub & epoch & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+stub & flush & \pending{} & \pending{} & \pending{} & \pending{} & -- & \pending{} \\
+stub & full & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Defenses compared.}
+\label{sec:res-baselines}
+An identifier-based purge (\texttt{legacy}) cannot reach a summary; in the pilot, \texttt{legacy}
+lowered memory leakage (0.322 to 0.230) but not total leakage, which the stale index dominated.
+\pending{R4: the published retrieval-time design (authz\_prefilter) removes index leakage and leaves
+cache and memory leakage; epoch and full reach zero; the retained-recall and refusal columns decide
+between them. State the result whichever way it goes: if epoch invalidation keeps as much retained
+recall as taint, the simpler mechanism is the recommendation. Stub rows: whether flush, the
+post-filter design and the shared cache change the picture.}
+
+\subsection{RQ5: What does the defense cost?}
+\label{sec:rq5}
+\pending{R5: retained-document recall and refusals per preset (model run and stub), and IAM calls and
+per-document authorization decisions per query, from the revocation runs.}
+
+\subsection{Robustness}
+\label{sec:res-review}
+
+\paragraph{Post-revocation updates (stub).}
+\label{sec:res-update}
+\pending{R6: $\LM^{\text{upd}}$ per preset from p\_min\_update\_stub.}
+
+\paragraph{Unmodified open-source stack.}
+\label{sec:res-realstack}
+To check that the leaks are not artifacts of our pipeline, we rebuilt the scenario from library
+defaults only: a LangChain agent (\texttt{create\_agent}, LangChain 1.4) with a retrieval tool over
+Chroma, \texttt{SummarizationMiddleware} for chat memory and a RedisVL \texttt{SemanticCache} (Redis
+8) scoped per user with a tag filter~\cite{doc_langchain_summary,doc_redisvl}
+(\texttt{scripts/real\_stack\_demo.py}). The generator is Llama-3.1-8B (4-bit, served locally by
+Ollama), the model of the main run, and Qwen2.5-7B judges paraphrases. The retrieval tool checks the
+live identity system on every call, so the index never serves a revoked document. For 10 restricted
+Enron e-mails, a victim held a five-turn session, lost the e-mail's group, and asked again. In 10/10
+cases retrieval refused the e-mail and a fresh session without the cache disclosed nothing. The
+per-user cache returned the stored answer in 10/10 cases, both for the original question and for a
+reworded one (``Could you tell me \ldots''), and disclosed a corpus-unique value or the canary in 6/10,
+which is every case in which the warm-up answers had shown one. In the same session, memory disclosed
+a secret in 5/10 cases. Four of these secrets were in the model-written summary and two in a retrieved
+e-mail kept verbatim as a tool message (one in both); in one case, memory disclosed a value that none of
+the victim's warm-up answers contained: the summary had condensed the retrieved e-mail, not only the
+answers, so agent memory carries new disclosure as well as re-disclosure. With Qwen2.5-7B as the
+generator the exact-match counts were the same (cache 6/10, memory 5/10). Every response is in
+\texttt{results/real\_stack\_demo/} and was checked by hand.

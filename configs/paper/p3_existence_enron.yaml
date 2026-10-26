@@ -1,0 +1,19 @@
+# RQ3 on Enron with canaries (train e1-e3, test e4-e5 by the default split). Most Enron targets
+# (457 of 500) have no same-thread sibling.
+name: p3_existence_enron
+experiment: existence
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: enron_c
+  exposure: with_reranker
+  attackers: [insider, outsider]
+  victim_warmup: 0.5
+  sync: live
+  targets_per_tenant: 12
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+  llm_cache: false
+grid:
+  preset: [strawman, baseline, baseline_shared, legacy, epoch, full, full_user]

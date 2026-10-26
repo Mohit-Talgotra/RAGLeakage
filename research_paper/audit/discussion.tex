@@ -1,0 +1,23 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{What the measurements establish.}
+In this testbed each derived artifact serves revoked content on its own, and the duration of each leak follows its refresh mechanism: the index by the crawl period, the cache by the TTL, memory by nothing (it does not expire within 48\,h). The practical consequence is that fixing one propagation path leaves the others open. Event-driven ACL sync lowered total leakage by 0.111 and left the cache and memory leaks untouched.
+
+\paragraph{Why the defense works here.}
+Provenance taint changes the question the system asks of an artifact from ``was this evicted?'' to ``may this user read everything it came from?'', and the second question can be answered at read time against the identity system. The ablation is consistent with this reading: the one component that carries provenance through summaries (transitive taint) is the one whose removal produces substantial leakage, while eviction and the lazy check cover for each other. We have not tested whether a different provenance mechanism would do equally well; the results concern this one.
+
+\paragraph{Memory deserves separate treatment.}
+Memory is the only artifact that never healed in the runs, and with a real generator it contributed more leakage than the stub suggested (0.715 against 0.305). A plausible reason, not tested, is that the stub sometimes declines to repeat earlier answers while Qwen2.5-3B repeats them faithfully. Whatever the cause, evaluations that use only a stub generator should be read as lower bounds on memory leakage.
+
+\paragraph{Where optimizations create leaks.}
+A fast refusal path is an optimization for the user, since it avoids an LLM call when nothing is authorized. With a post-filter and without padding it raised inference AUC from 0.854 to 0.897. The observation is narrow (one stub timing model, 1\,ms rounding) but it illustrates that latency-saving shortcuts should be reviewed as part of the metadata surface.
+
+\paragraph{Metadata and content are separate problems.}
+Under the pre-filter the score channels are near chance, and what remains in typical deployments is answer content (content-channel AUC 0.60--0.62). The lazy cache check reduces the residual to chance in the ablation (0.538 without it), which suggests, but does not prove, that shared cache state is the main carrier.
+
+\paragraph{Cost.}
+In the testbed the defense costs 360\,ms of median latency, because padding raises every response to a bucket, and a slightly lower cache hit rate. The result says nothing about cost on a production workload; the 500\,ms bucket is a parameter, and we did not search for the smallest bucket that keeps the timing channel at chance. In the main runs the live IAM check and the lazy taint check are in-process lookups; the overhead experiment (\cref{sec:res-review}) adds a simulated remote round trip per enforcement point. Bucket padding also leaves a coarse residual signal: a response slower than one bucket is released in a later bucket (the p95 of 1500\,ms is three buckets), so the number of buckets remains observable. With Qwen2.5-3B under \texttt{full}, the bucket count alone separates the two worlds at AUC 0.508: 8.2\%, 57.0\% and 34.8\% of probes fall in the first, second and third-or-later bucket when the document exists, against 8.7\%, 57.9\% and 33.3\% when it does not. A generator whose latency depends more strongly on the presence of a document could expose more.
+
+\paragraph{Practical guidance, limited to what was measured.}
+(i) Enforce revocation on read against live IAM, not by waiting for propagation. (ii) Track provenance through summaries; an identifier-match purge did not reduce leakage in these runs (0.634 against 0.634). (iii) Filter by ACL before scoring. (iv) Do not add a fast refusal path without padding.

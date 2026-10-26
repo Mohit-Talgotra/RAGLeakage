@@ -1,0 +1,27 @@
+# The comparison the defense has to win (audit C6): same zero leakage as the simple
+# alternatives, better retained-document utility. Published enforcement patterns alongside.
+# Summaries: model-written (full_fine then equals full: no sentence mapping) and extractive
+# (sentence-level taint applies). Generated corpus; Enron is p4_defenses_revocation_enron.
+name: p4_defenses_revocation
+experiment: revocation
+seeds: 5
+base:
+  embedder: all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+  corpus: synthetic_v3@seed
+  sync: periodic:86400
+  events: 40
+  warm_restricted: 2
+  probe_retained: true
+  probe_readonly: true
+  probe_unseen: true
+  probe_paraphrase: file
+  probe_times: [0, 600, 3600, 14400, 43200, 86400, 172800]
+  llm_backend: ollama
+  llm_model: llama3.1:8b
+grid:
+  preset: [baseline, baseline_shared, authz_prefilter, authz_postfilter, epoch, flush, full, full_user, full_fine]
+  revocation_type: [single_doc, role]
+variants:
+  - {variant: llm_summary, summarizer: llm}
+  - {variant: extractive_summary, summarizer: extractive}
